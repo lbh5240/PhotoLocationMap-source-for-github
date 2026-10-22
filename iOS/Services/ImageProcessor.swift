@@ -47,7 +47,7 @@ actor ImageProcessor {
         let w = max(1, Int(small.extent.width)), h = max(1, Int(small.extent.height))
         var bytes = [UInt8](repeating: 0, count: w*h*4)
         bytes.withUnsafeMutableBytes { raw in
-            context.render(small, toBitmap: raw.baseAddress!, rowBytes: w*4, bounds: CGRect(x: small.extent.minX, y: small.extent.minY, width: w, height: h), format: .RGBA8, colorSpace: colorSpace)
+            context.render(small, toBitmap: raw.baseAddress!, rowBytes: w*4, bounds: CGRect(x: small.extent.minX, y: small.extent.minY, width: CGFloat(w), height: CGFloat(h)), format: .RGBA8, colorSpace: colorSpace)
         }
         let analysis = try FrameAnalysis(rgba: bytes, width: w, height: h)
         func overlay(_ mask: [UInt8], zebra: Bool) -> Data? {
