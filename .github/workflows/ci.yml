@@ -22,7 +22,7 @@ jobs:
       - name: Regenerate project
         run: python3 Tools/generate_project.py
       - name: iOS simulator build
-        run: xcodebuild -project ZORACamera.xcodeproj -scheme ZORACamera -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+        run: xcodebuild -project ZORACamera.xcodeproj -scheme ZORACamera -destination 'generic/platform=iOS Simulator' ARCHS=arm64 CODE_SIGNING_ALLOWED=NO build
       - name: Select installed iOS 27 simulator
         run: |
           python3 - <<'PY'
@@ -33,7 +33,7 @@ jobs:
           with open(os.environ['GITHUB_ENV'],'a') as f: f.write('ZORA_SIMULATOR='+choices[0]['udid']+'\n')
           PY
       - name: Native UI smoke tests
-        run: xcodebuild -project ZORACamera.xcodeproj -scheme ZORACamera -destination "platform=iOS Simulator,id=$ZORA_SIMULATOR" -resultBundlePath TestResults/UI.xcresult CODE_SIGNING_ALLOWED=NO test
+        run: xcodebuild -project ZORACamera.xcodeproj -scheme ZORACamera -destination "platform=iOS Simulator,id=$ZORA_SIMULATOR" -resultBundlePath TestResults/UI.xcresult ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO test
       - uses: actions/upload-artifact@v4
         if: always()
         with:
