@@ -1,0 +1,9 @@
+.build/
+.swiftpm/
+DerivedData/
+Builds/
+TestResults/
+__pycache__/
+*.pyc
+*.p12
+*.mobileprovision
