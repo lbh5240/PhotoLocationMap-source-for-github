@@ -11,7 +11,7 @@ struct LooksView: View {
                     SectionLabel(title: "让色彩有自己的语气", subtitle: "ZORA Recipes · 独立的手机端影像风格")
                     ForEach(Array(model.recipes.enumerated()), id: \.element.id) { index, recipe in
                         VStack(alignment: .leading, spacing: 16) {
-                            HStack { Text(String(format: "%02d", index+1)).font(.system(.caption, design: .monospaced)).foregroundStyle(.zoraAmber); Spacer(); Image(systemName: recipe.saturation == 0 ? "circle.lefthalf.filled" : "sun.haze") }
+                            HStack { Text(String(format: "%02d", index+1)).font(.system(.caption, design: .monospaced)).foregroundStyle(Color.zoraAmber); Spacer(); Image(systemName: recipe.saturation == 0 ? "circle.lefthalf.filled" : "sun.haze") }
                             Text(recipe.name).font(.title2.weight(.medium))
                             HStack { Text("EV \(recipe.exposure, specifier: "%.1f")"); Text("对比 \(recipe.contrast, specifier: "%.2f")"); Text("色温 \(recipe.temperature, specifier: "%.0f")") }
                                 .font(.caption).foregroundStyle(.secondary)

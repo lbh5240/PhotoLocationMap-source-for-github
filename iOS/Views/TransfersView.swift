@@ -16,7 +16,7 @@ struct TransfersView: View {
                 ForEach(model.jobs) { job in
                     VStack(alignment: .leading, spacing: 6) {
                         Text(model.assets.first { $0.storedName == job.file.lastPathComponent }?.originalName ?? job.file.lastPathComponent).font(.caption).lineLimit(1)
-                        HStack { Text(label(job.state)); Spacer(); Text("尝试 \(job.attempts) 次") }.font(.caption).foregroundStyle(job.state == .complete ? .green : .zoraAmber)
+                        HStack { Text(label(job.state)); Spacer(); Text("尝试 \(job.attempts) 次") }.font(.caption).foregroundStyle(job.state == .complete ? Color.green : Color.zoraAmber)
                         if let error = job.lastError { Text(error).font(.caption2).foregroundStyle(.secondary) }
                     }.padding(.vertical, 5)
                 }

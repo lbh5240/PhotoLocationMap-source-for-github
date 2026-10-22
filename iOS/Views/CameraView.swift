@@ -33,7 +33,7 @@ struct CameraView: View {
                                 if grid { GridOverlay() }
                             } else {
                                 VStack(spacing: 12) {
-                                    Image(systemName: "viewfinder").font(.system(size: 46, weight: .ultraLight)).foregroundStyle(.zoraAmber)
+                                    Image(systemName: "viewfinder").font(.system(size: 46, weight: .ultraLight)).foregroundStyle(Color.zoraAmber)
                                     Text(model.device == nil ? "等待你的 Nikon Z7 II" : "准备开始实时取景").font(.headline)
                                     Text("画面仅在相机返回真实图像后显示").font(.caption).foregroundStyle(.secondary)
                                 }.padding()
