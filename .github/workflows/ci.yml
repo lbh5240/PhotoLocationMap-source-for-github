@@ -1,0 +1,41 @@
+name: Swift core and iOS
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  core:
+    runs-on: xcode-27
+    steps:
+      - uses: actions/checkout@v4
+      - name: Environment
+        run: swift --version
+      - name: Core and explicit fixture tests
+        run: swift test
+  ios:
+    runs-on: xcode-27
+    steps:
+      - uses: actions/checkout@v4
+      - name: Xcode environment (requires iOS 27 SDK)
+        run: xcodebuild -version
+      - name: Regenerate project
+        run: python3 Tools/generate_project.py
+      - name: iOS simulator build
+        run: xcodebuild -project ZORACamera.xcodeproj -scheme ZORACamera -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+      - name: Select installed iOS 27 simulator
+        run: |
+          python3 - <<'PY'
+          import subprocess, json, os
+          devices=json.loads(subprocess.check_output(['xcrun','simctl','list','devices','available','--json']))['devices']
+          choices=[d for runtime,items in devices.items() if 'iOS-27' in runtime for d in items if d['name'].startswith('iPhone')]
+          if not choices: raise SystemExit('Install an iOS 27 simulator runtime before UI testing.')
+          with open(os.environ['GITHUB_ENV'],'a') as f: f.write('ZORA_SIMULATOR='+choices[0]['udid']+'\n')
+          PY
+      - name: Native UI smoke tests
+        run: xcodebuild -project ZORACamera.xcodeproj -scheme ZORACamera -destination "platform=iOS Simulator,id=$ZORA_SIMULATOR" -resultBundlePath TestResults/UI.xcresult CODE_SIGNING_ALLOWED=NO test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ui-test-results
+          path: TestResults

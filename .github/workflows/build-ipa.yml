@@ -1,0 +1,47 @@
+name: Build ZORA IPA
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, codex/zora-ipa]
+    paths:
+      - 'iOS/**'
+      - 'Sources/**'
+      - 'Tools/**'
+      - 'Package.swift'
+      - 'ZORACamera.xcodeproj/**'
+      - '.github/workflows/build-ipa.yml'
+permissions:
+  contents: read
+concurrency:
+  group: zora-ipa-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: xcode-27
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build environment
+        run: xcodebuild -version
+      - name: Validate packaging checks
+        run: python3 -m unittest discover -s Tools/tests -v
+      - name: Core tests
+        run: swift test
+      - name: Compile ARM64 device app and package unsigned IPA
+        run: python3 Tools/build_ipa.py --unsigned
+      - name: Download IPA and build evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZORACamera-unsigned-IPA
+          path: |
+            Builds/**/*.ipa
+            Builds/**/IPA_BUILD_REPORT.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Preserve Xcode failure log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZORACamera-build-errors
+          path: Builds/**/archive.log
+          if-no-files-found: ignore
