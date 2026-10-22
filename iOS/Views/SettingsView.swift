@@ -14,7 +14,7 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("NAS 目的地") {
+                Section {
                     Picker("连接方式", selection: $kind) { ForEach(DestinationKind.allCases, id: \.self) { Text($0 == .webDAV ? "WebDAV" : "S3 兼容").tag($0) } }
                     TextField("HTTPS 服务地址", text: $endpoint).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
                     TextField("远端目录 / 前缀", text: $prefix).textInputAutocapitalization(.never).autocorrectionDisabled()
@@ -32,7 +32,7 @@ struct SettingsView: View {
                             secret = ""; token = ""
                         }
                     }.disabled(model.busy)
-                } footer: { Text("仅支持有效证书的 HTTPS，不绕过证书校验。WebDAV 使用 Basic Auth，S3 使用 SigV4 path-style。WebDAV 目录需预先建立。密码存入本机钥匙串；修改配置后已有任务继续使用原目的地。") }
+                } header: { Text("NAS 目的地") } footer: { Text("仅支持有效证书的 HTTPS，不绕过证书校验。WebDAV 使用 Basic Auth，S3 使用 SigV4 path-style。WebDAV 目录需预先建立。密码存入本机钥匙串；修改配置后已有任务继续使用原目的地。") }
                 Section("设备与验证") {
                     LabeledContent("相机", value: model.device?.model ?? "未连接")
                     LabeledContent("固件", value: model.device?.firmware ?? "未读取")
