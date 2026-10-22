@@ -1,10 +1,10 @@
 # Mac / iPhone / 相机 / NAS 验收清单
 
-所有条目当前均为待执行项，不能因为核心测试通过而勾选。
+除已注明通过的云端编译外，其余条目仍需逐项执行，不能因为核心测试通过而勾选硬件验收。
 
 ## Xcode 与界面
 
-- [ ] 用 iOS 27 SDK 构建 Debug/Release；解决 SwiftUI/CoreImage/Network API 与严格并发诊断。
+- [x] 用云端 Xcode 27 / iOS 27 SDK 完成 Debug 模拟器编译与 Release ARM64 真机归档；解决本次 SwiftUI/CoreImage 编译诊断。
 - [ ] 核心测试 + UI Tests + Instruments。记录 Xcode build、iOS build、机型和 .xcresult。
 - [ ] iPhone/iPad 竖横屏、最大动态字体、VoiceOver、Reduce Motion/Transparency、深浅环境对比、键盘避让。
 - [ ] 真机签名与 Hotspot Configuration entitlement；本地网络/蓝牙权限允许、拒绝、撤回路径。

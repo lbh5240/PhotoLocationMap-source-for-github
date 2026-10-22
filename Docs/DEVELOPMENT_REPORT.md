@@ -2,6 +2,8 @@
 
 日期：2026-10-22（Asia/Shanghai）。本报告区分源码完成、自动测试和硬件验证。
 
+后续更新：已接入用户提供的 GitHub 仓库，成功通过 Xcode 27 真机 Release 归档并生成未签名 IPA。详见 `IPA_DELIVERY.md`；下文的本地环境描述保留为最初 Windows 开发阶段记录，已不代表当前完全没有 iOS 编译证据。
+
 ## 交付物
 
 原生 iOS 27 / Swift 6 / SwiftUI 项目，Xcode 工程与共享 scheme，可独立构建的 ZoraCore Swift 包，五个主要页面、相机 TCP 传输适配、照片库/编辑/导出、独立 Recipes/LUT、WebDAV/S3 传输与持久离线队列，核心/协议夹具/UI 测试、CI 定义、示例及验收清单。没有交付签名 IPA 或声称 App Store 可发布。

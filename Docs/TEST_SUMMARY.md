@@ -9,7 +9,8 @@
 | HTTPS 服务实测 | 跳过 | 未设置 ZORA_TEST_HTTPS，没有 NAS 或受信任测试 TLS 服务 |
 | Swift iOS 源码语法解析 | 通过 | 仅 parser；不代表 iOS SDK 类型检查、链接或运行通过 |
 | Xcode 工程静态检查 | 通过 | 文件引用存在、对象引用解析、XML/plist 合法、生成脚本可重复 |
-| iOS 构建 / UI 测试 | 未运行 | 无 Mac/Xcode/iOS Simulator |
+| iOS 真机 Release 归档 / IPA | 云端通过 | Xcode 27.0、iOS 27.0 SDK，真实 ARM64 iPhoneOS 二进制；未签名 |
+| iOS 模拟器构建 / UI 测试 | 构建通过；UI 结果见最新 CI | 已提供云端模拟器环境；不替代真机验证 |
 | Z7 II / BLE Nikon 配对 / 实时图传 | 未验证 | 无连接相机；Synthetic fixtures 不是互通证明 |
 | WebDAV / S3 真机 NAS | 未验证 | 没有实际目的地凭据；HTTP 夹具只验证 App 传输调用流程 |
 

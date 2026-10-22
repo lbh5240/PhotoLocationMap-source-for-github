@@ -1,0 +1,13 @@
+{
+  "bundle_id": "app.zora.camera",
+  "version": "0.1.0",
+  "minimum_ios": "27.0",
+  "architecture": "arm64",
+  "platform": "iPhoneOS",
+  "signature_verified": false,
+  "built_at": "2026-10-22T03:55:30.745872+00:00",
+  "sdk": "27.0",
+  "unsigned": true,
+  "ipa": "ZORACamera-unsigned.ipa",
+  "sha256": "2b6e1675ff5cb574dc08d47da36d0e5303b0db312b2585602f01e2f98c8952ac"
+}

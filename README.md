@@ -4,6 +4,8 @@
 
 **这是可继续开发的实验版本，不是已交付验收的 SnapBridge 替代品。** 相机驱动发送实际 PTP/IP 数据，未连接设备时不生成取景画面，也不会显示虚假连接成功。Z7 II 私有认证、相机网络模式及各项操作仍需真机验证。完整状态见 [开发报告](Docs/DEVELOPMENT_REPORT.md) 与 [通信可行性矩阵](Docs/CAMERA_FEASIBILITY.md)。
 
+已通过云端 Xcode 27 的 ARM64 真机 Release 归档，并生成未签名 IPA；构建记录和哈希见 [IPA 交付记录](Docs/IPA_DELIVERY.md)。未签名包需要签名后才能安装。
+
 ## 打开与运行
 
 1. 在 Mac 上使用包含 iOS 27 SDK 的 Xcode 打开 `ZORACamera.xcodeproj`。
@@ -43,7 +45,7 @@ WebDAV 需先创建设置中的远端目录。S3 需先创建 bucket。App 给�
 
 ## 当前明确边界
 
-- 尚无 Xcode/iOS 构建、设备 UI 截图、安装包、签名或 App Store 验收结果。
+- 已完成云端 Xcode/iOS 真机归档与未签名 IPA 打包；尚无签名安装、真实设备 UI 截图或 App Store 验收结果。
 - BLE 是真实扫描，Nikon 私有 GATT 配对/唤醒/自动 Wi-Fi 切换未实现。
 - 未确认 Z7 II 在智能设备模式接受通用 PTP/IP；拒绝握手会报错，不会降级为模拟成功。需要实际固件、网络模式和授权协议样本。
 - 相机单文件下载 64 MiB 上限；更大 NEF 可通过 Files 导入。S3 上传单文件 256 MiB 上限，尚无 multipart/resume。
