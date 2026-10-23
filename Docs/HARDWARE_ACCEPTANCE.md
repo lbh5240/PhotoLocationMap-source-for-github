@@ -5,7 +5,8 @@
 ## Xcode 与界面
 
 - [x] 用云端 Xcode 27 / iOS 27 SDK 完成 Debug 模拟器编译与 Release ARM64 真机归档；解决本次 SwiftUI/CoreImage 编译诊断。
-- [ ] 核心测试 + UI Tests + Instruments。记录 Xcode build、iOS build、机型和 .xcresult。
+- [x] 核心测试与基础 UI Tests（39 核心项：38 通过/1 跳过；2 UI 项通过）。执行编号与日志见 TEST_SUMMARY.md。
+- [ ] Instruments 性能分析；真机 Xcode build、iOS build、机型和性能报告。
 - [ ] iPhone/iPad 竖横屏、最大动态字体、VoiceOver、Reduce Motion/Transparency、深浅环境对比、键盘避让。
 - [ ] 真机签名与 Hotspot Configuration entitlement；本地网络/蓝牙权限允许、拒绝、撤回路径。
 - [ ] 对有效 JPEG/HEIC/不同 NEF 压缩格式实测预览、方向、sRGB 导出。比较 identity LUT 前后颜色、黑白/曝光调整；原片 SHA256 保持不变。

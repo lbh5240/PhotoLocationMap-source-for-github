@@ -1,6 +1,6 @@
 # ZORA Camera
 
-当前源码版本 **0.2.0**：新增真实 Nikon BLE 四阶段认证、Wi-Fi 唤醒、保存相机、自动重连、前台自动连接、电量/校时和连接诊断。详见 [本次蓝牙开发报告](Docs/BLUETOOTH_AND_WAKE.md)。Z7 II 真机互操作与系统绑定尚待验收；旧版 0.1.0 打包证据不能代替新版验证。
+当前源码版本 **0.2.0**：新增真实 Nikon BLE 四阶段认证、Wi-Fi 唤醒、保存相机、自动重连、前台自动连接、电量/校时和连接诊断。详见 [本次蓝牙开发报告](Docs/BLUETOOTH_AND_WAKE.md) 与 [0.2.0 IPA 记录](Docs/IPA_DELIVERY.md)。Z7 II 真机互操作与系统绑定尚待验收。
 
 面向 Nikon Z7 II 的原生 iOS 27 摄影 App 开发工程。Swift 6、SwiftUI、Liquid Glass；独立核心包不依赖 Apple UI 框架。
 
@@ -14,7 +14,7 @@
 2. 选择 `ZORACamera` scheme、iPhone/iPad 模拟器或真机。
 3. 真机运行时，在 Signing & Capabilities 选择自己的 Apple Developer Team，并使用自己的 Bundle ID。工程包含 Hotspot Configuration entitlement。
 4. 运行后可以直接导入照片、编辑与导出、导入 `.cube` 或 Recipe JSON、配置 NAS 和查看上传队列。相机不是这些流程的前置条件。
-5. 真实相机连接：在 Z7 II 上启用连接至智能设备的 Wi-Fi → iPhone 加入相机热点 → 在“拍摄 → 连接相机”填写实际相机 IP → 建立实验 PTP/IP 会话。
+5. 真实相机连接：在“拍摄 → 连接相机”搜索 Nikon → 确认配对提示并完成认证 → 首次保存相机热点信息 → 点击“唤醒并连接相机”。也保留手动加入 Wi-Fi / 填写相机 IP 的路径。详见蓝牙报告中的真机步骤。
 
 连接失败时不要将问题解释为权限已经满足或协议已兼容：系统本地网络权限、网络模式、IP、端口、Nikon 私有配对均可能影响结果。不要同时让 SnapBridge 占用相机会话。
 
@@ -38,6 +38,7 @@ xcodebuild -project ZORACamera.xcodeproj -scheme ZORACamera \
 ## 可使用的功能路径
 
 - 拍摄：真实 TCP 双通道、PTP/IP 初始化、设备信息/操作集、Session、标准快门、Nikon AF/Live View 操作、标量属性枚举与设置、存储卡前 200 项/存储区、下载。
+- 连接：原生 Nikon BLE 四阶段认证、身份/热点钥匙串保存、Wi-Fi 唤醒、最多五次退避重连、系统蓝牙恢复、前台自动进入 PTP、校时与电量、分阶段连接诊断。
 - 监看：实际 JPEG 解码、九宫格、预览直方图、RGB 高亮斑马纹、亮度梯度峰值辅助。不是 RAW 传感器测量；没有音频、波形、矢量示波器或伪造曝光参数。
 - 照片：Files 多选导入、NEF/NRW/DNG 原片保留、持久索引、非破坏编辑、sRGB JPEG 导出、系统分享。RAW 解码失败仍保留原片，并显示具体不可用状态。
 - 风格：原创 Recipes、JSON 导入、3D `.cube` 导入、Core Image 曝光/色彩/色温/LUT。不是 Nikon 云创账号集成，不向 Z7 II 写入云创配方。
@@ -48,7 +49,7 @@ WebDAV 需先创建设置中的远端目录。S3 需先创建 bucket。App 给�
 ## 当前明确边界
 
 - 已完成云端 Xcode/iOS 真机归档与未签名 IPA 打包；尚无签名安装、真实设备 UI 截图或 App Store 验收结果。
-- BLE 是真实扫描，Nikon 私有 GATT 配对/唤醒/自动 Wi-Fi 切换未实现。
+- BLE GATT 认证、唤醒及自动 Wi-Fi 衔接已实现；公开跨机型向量测试通过，Z7 II 首配/系统绑定/唤醒仍待硬件验收。iOS 加入网络可能需要用户确认，后台与强制退出时不保证唤醒。
 - 未确认 Z7 II 在智能设备模式接受通用 PTP/IP；拒绝握手会报错，不会降级为模拟成功。需要实际固件、网络模式和授权协议样本。
 - 相机单文件下载 64 MiB 上限；更大 NEF 可通过 Files 导入。S3 上传单文件 256 MiB 上限，尚无 multipart/resume。
 - 队列在 App 前台/仍获执行时间时工作；未接入后台 URLSession、BGTaskScheduler，不承诺后台持续上传。退到后台会停止实时取景。

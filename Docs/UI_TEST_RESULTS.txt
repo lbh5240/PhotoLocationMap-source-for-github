@@ -1,0 +1,18 @@
+Commit: 6e89dfa377d577faccbab063580186e7302d5fa8
+Run: https://github.com/lbh5240/PhotoLocationMap-source-for-github/actions/runs/39955966544
+Platform: iOS 27 simulator, not Nikon hardware validation.
+
+Test Suite 'All tests' started at 2026-10-23 12:53:43.066.
+Test Suite 'ZORACameraUITests.xctest' started at 2026-10-23 12:53:43.069.
+Test Suite 'ZORACameraUITests' started at 2026-10-23 12:53:43.070.
+Test Case '-[ZORACameraUITests.ZORACameraUITests testDisconnectedCameraDoesNotPresentFakeLiveView]' started.
+Test Case '-[ZORACameraUITests.ZORACameraUITests testDisconnectedCameraDoesNotPresentFakeLiveView]' passed (12.976 seconds).
+Test Case '-[ZORACameraUITests.ZORACameraUITests testLibraryAndLooksNavigation]' started.
+Test Case '-[ZORACameraUITests.ZORACameraUITests testLibraryAndLooksNavigation]' passed (16.345 seconds).
+Test Suite 'ZORACameraUITests' passed at 2026-10-23 12:54:12.400.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 29.321 (29.330) seconds
+Test Suite 'ZORACameraUITests.xctest' passed at 2026-10-23 12:54:12.400.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 29.321 (29.331) seconds
+Test Suite 'All tests' passed at 2026-10-23 12:54:12.401.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 29.321 (29.335) seconds
+** TEST SUCCEEDED **

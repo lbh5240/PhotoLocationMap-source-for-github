@@ -1,204 +1,103 @@
-[0/1] Planning build
-Building for debugging...
-[0/6] Write sources
-[2/6] Write swift-version--3D19BC82F8EB64EB.txt
-[4/11] Compiling ZoraCore CameraSession.swift
-[5/11] Emitting module ZoraCore
-[6/11] Compiling ZoraCore PTP.swift
-[7/11] Compiling ZoraCore Binary.swift
-[8/11] Compiling ZoraCore Upload.swift
-[9/14] Compiling ZoraCore Imaging.swift
-[10/14] Compiling ZoraCore Library.swift
-[11/14] Compiling ZoraCore CameraProperty.swift
-[13/19] Emitting module ZoraCoreTests
-[14/19] Compiling ZoraCoreTests PipelineTests.swift
-[15/19] Compiling ZoraCoreTests StorageTests.swift
-[16/19] Compiling ZoraCoreTests SessionTests.swift
-[17/20] W:\zora-build\x86_64-unknown-windows-msvc\debug\ZORACameraPackageDiscoveredTests.derived\all-discovered-tests.swift
-[18/21] Write sources
-[20/24] Emitting module ZORACameraPackageDiscoveredTests
-[21/24] Compiling ZORACameraPackageDiscoveredTests ZoraCoreTests.swift
-[22/24] Compiling ZORACameraPackageDiscoveredTests all-discovered-tests.swift
-[23/25] Wrapping AST for ZORACameraPackageDiscoveredTests for debugging
-[24/30] W:\zora-build\x86_64-unknown-windows-msvc\debug\ZORACameraPackageTests.derived\runner.swift
-[25/31] Write sources
-[26/31] Wrapping AST for ZoraCoreTests for debugging
-[27/31] Wrapping AST for ZoraCore for debugging
-[29/33] Compiling ZORACameraPackageTests runner.swift
-[30/33] Emitting module ZORACameraPackageTests
-[31/33] Write Objects.LinkFileList
-[32/33] Linking ZORACameraPackageTests.xctest
-Build complete! (35.23s)
-warning: unable to create symbolic link at W:\zora-build\debug: Error Domain=NSCocoaErrorDomain Code=512 "(null)"UserInfo={NSFilePath=W:\zora-build\debug, NSUnderlyingError=Win32Error(code: 1314), NSURL=file:///W:/zora-build/debug}
-Test Suite 'All tests' started at 2026-10-22 03:30:10.719
-
-Test Suite 'debug.xctest' started at 2026-10-22 03:30:10.723
-
-Test Suite 'ImagingTests' started at 2026-10-22 03:30:10.724
-
-Test Case 'ImagingTests.testIdentityCubeAndInvalidRows' started at 2026-10-22 03:30:10.724
-
-Test Case 'ImagingTests.testIdentityCubeAndInvalidRows' passed (0.004 seconds)
-
-Test Case 'ImagingTests.testMonitorHistogramAndClipping' started at 2026-10-22 03:30:10.727
-
-Test Case 'ImagingTests.testMonitorHistogramAndClipping' passed (0.001 seconds)
-
-Test Case 'ImagingTests.testPeakingFindsAnEdge' started at 2026-10-22 03:30:10.729
-
-Test Case 'ImagingTests.testPeakingFindsAnEdge' passed (0.001 seconds)
-
-Test Case 'ImagingTests.testRecipeValidation' started at 2026-10-22 03:30:10.729
-
-Test Case 'ImagingTests.testRecipeValidation' passed (0.0 seconds)
-
-Test Suite 'ImagingTests' passed at 2026-10-22 03:30:10.730
-
-	 Executed 4 tests, with 0 failures (0 unexpected) in 0.006 (0.006) seconds
-
-Test Suite 'PipelineTests' started at 2026-10-22 03:30:10.730
-
-Test Case 'PipelineTests.testImportOfflineRestartUploadThroughActualHTTPTransportWithExplicitURLProtocolFixture' started at 2026-10-22 03:30:10.730
-
-Test Case 'PipelineTests.testImportOfflineRestartUploadThroughActualHTTPTransportWithExplicitURLProtocolFixture' passed (0.045 seconds)
-
-Test Suite 'PipelineTests' passed at 2026-10-22 03:30:10.775
-
-	 Executed 1 test, with 0 failures (0 unexpected) in 0.045 (0.045) seconds
-
-Test Suite 'ProtocolTests' started at 2026-10-22 03:30:10.775
-
-Test Case 'ProtocolTests.testCompleteTransactionDataPhase' started at 2026-10-22 03:30:10.775
-
-Test Case 'ProtocolTests.testCompleteTransactionDataPhase' passed (0.001 seconds)
-
-Test Case 'ProtocolTests.testDeviceInfoCapabilities' started at 2026-10-22 03:30:10.776
-
-Test Case 'ProtocolTests.testDeviceInfoCapabilities' passed (0.001 seconds)
-
-Test Case 'ProtocolTests.testFramerEverySplitBoundaryAndCoalescing' started at 2026-10-22 03:30:10.777
-
-Test Case 'ProtocolTests.testFramerEverySplitBoundaryAndCoalescing' passed (0.001 seconds)
-
-Test Case 'ProtocolTests.testFramerRejectsUnderflowAndOversize' started at 2026-10-22 03:30:10.778
-
-Test Case 'ProtocolTests.testFramerRejectsUnderflowAndOversize' passed (0.0 seconds)
-
-Test Case 'ProtocolTests.testInitializationHasGUIDNameAndVersion' started at 2026-10-22 03:30:10.778
-
-Test Case 'ProtocolTests.testInitializationHasGUIDNameAndVersion' passed (0.001 seconds)
-
-Test Case 'ProtocolTests.testLiveViewHeaderAndTruncation' started at 2026-10-22 03:30:10.778
-
-Test Case 'ProtocolTests.testLiveViewHeaderAndTruncation' passed (0.001 seconds)
-
-Test Case 'ProtocolTests.testOperationWireVector' started at 2026-10-22 03:30:10.779
-
-Test Case 'ProtocolTests.testOperationWireVector' passed (0.0 seconds)
-
-Test Case 'ProtocolTests.testReaderTruncationDoesNotCrash' started at 2026-10-22 03:30:10.779
-
-Test Case 'ProtocolTests.testReaderTruncationDoesNotCrash' passed (0.0 seconds)
-
-Test Case 'ProtocolTests.testScalarPropertyEnumGatesWrites' started at 2026-10-22 03:30:10.780
-
-Test Case 'ProtocolTests.testScalarPropertyEnumGatesWrites' passed (0.0 seconds)
-
-Test Case 'ProtocolTests.testTransactionRejectsWrongIDAndLength' started at 2026-10-22 03:30:10.780
-
-Test Case 'ProtocolTests.testTransactionRejectsWrongIDAndLength' passed (0.0 seconds)
-
-Test Suite 'ProtocolTests' passed at 2026-10-22 03:30:10.780
-
-	 Executed 10 tests, with 0 failures (0 unexpected) in 0.004 (0.004) seconds
-
-Test Suite 'SessionTests' started at 2026-10-22 03:30:10.780
-
-Test Case 'SessionTests.testCameraErrorPreservesSessionButOversizedTransferClosesIt' started at 2026-10-22 03:30:10.780
-
-Test Case 'SessionTests.testCameraErrorPreservesSessionButOversizedTransferClosesIt' passed (0.001 seconds)
-
-Test Case 'SessionTests.testRealSessionPipelineOverExplicitProtocolFixture' started at 2026-10-22 03:30:10.781
-
-Test Case 'SessionTests.testRealSessionPipelineOverExplicitProtocolFixture' passed (0.001 seconds)
-
-Test Case 'SessionTests.testRejectedHandshakeNeverConnects' started at 2026-10-22 03:30:10.781
-
-Test Case 'SessionTests.testRejectedHandshakeNeverConnects' passed (0.0 seconds)
-
-Test Case 'SessionTests.testUnsupportedOperationSendsNothing' started at 2026-10-22 03:30:10.781
-
-Test Case 'SessionTests.testUnsupportedOperationSendsNothing' passed (0.0 seconds)
-
-Test Suite 'SessionTests' passed at 2026-10-22 03:30:10.782
-
-	 Executed 4 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
-
-Test Suite 'StorageTests' started at 2026-10-22 03:30:10.782
-
-Test Case 'StorageTests.testCorruptQueueIsNotSilentlyDiscarded' started at 2026-10-22 03:30:10.782
-
-Test Case 'StorageTests.testCorruptQueueIsNotSilentlyDiscarded' passed (0.012 seconds)
-
-Test Case 'StorageTests.testCrashRecoveryOfUploadingJob' started at 2026-10-22 03:30:10.794
-
-Test Case 'StorageTests.testCrashRecoveryOfUploadingJob' passed (0.129 seconds)
-
-Test Case 'StorageTests.testHMACRFC4231' started at 2026-10-22 03:30:10.922
-
-Test Case 'StorageTests.testHMACRFC4231' passed (0.001 seconds)
-
-Test Case 'StorageTests.testHTTPUploadAgainstOptInLocalTLSFixture' started at 2026-10-22 03:30:10.923
-
-C:\Users\260321\Documents\Codex\2026-10-22\referenced-chatgpt-conversation-this-is-an\outputs\ZORACamera\Tests\ZoraCoreTests\StorageTests.swift:97: StorageTests.testHTTPUploadAgainstOptInLocalTLSFixture : Test skipped - Set ZORA_TEST_HTTPS to local trusted TLS fixture URL
-
-Test Case 'StorageTests.testHTTPUploadAgainstOptInLocalTLSFixture' skipped (0.001 seconds)
-
-Test Case 'StorageTests.testLibraryImportPreservesRAWAndPersistsRecipe' started at 2026-10-22 03:30:10.924
-
-Test Case 'StorageTests.testLibraryImportPreservesRAWAndPersistsRecipe' passed (0.026 seconds)
-
-Test Case 'StorageTests.testOfflineQueueRestartsDeduplicatesAndCompletes' started at 2026-10-22 03:30:10.950
-
-Test Case 'StorageTests.testOfflineQueueRestartsDeduplicatesAndCompletes' passed (0.02 seconds)
-
-Test Case 'StorageTests.testS3CanonicalPathEncodesReservedCharacters' started at 2026-10-22 03:30:10.969
-
-Test Case 'StorageTests.testS3CanonicalPathEncodesReservedCharacters' passed (0.025 seconds)
-
-Test Case 'StorageTests.testS3SigningFixedVector' started at 2026-10-22 03:30:10.994
-
-Test Case 'StorageTests.testS3SigningFixedVector' passed (0.004 seconds)
-
-Test Case 'StorageTests.testSHA256PublishedVectors' started at 2026-10-22 03:30:10.998
-
-Test Case 'StorageTests.testSHA256PublishedVectors' passed (0.918 seconds)
-
-Test Case 'StorageTests.testTargetEncodesUnicodeAndRejectsHTTPTraversal' started at 2026-10-22 03:30:11.916
-
-Test Case 'StorageTests.testTargetEncodesUnicodeAndRejectsHTTPTraversal' passed (0.0 seconds)
-
-Test Case 'StorageTests.testTransientFailureBackoffAndPermanentAuthFailure' started at 2026-10-22 03:30:11.916
-
-Test Case 'StorageTests.testTransientFailureBackoffAndPermanentAuthFailure' passed (0.068 seconds)
-
-Test Suite 'StorageTests' passed at 2026-10-22 03:30:11.985
-
-	 Executed 11 tests, with 1 test skipped and 0 failures (0 unexpected) in 1.203 (1.203) seconds
-
-Test Suite 'debug.xctest' passed at 2026-10-22 03:30:11.985
-
-	 Executed 30 tests, with 1 test skipped and 0 failures (0 unexpected) in 1.26 (1.26) seconds
-
-Test Suite 'All tests' passed at 2026-10-22 03:30:11.985
-
-	 Executed 30 tests, with 1 test skipped and 0 failures (0 unexpected) in 1.26 (1.26) seconds
-
-◊ Test run started.
-
-→ Testing Library Version: 6.2 (3fdabe5392108d8)
-
-→ Target Platform: x86_64-unknown-windows-msvc
-
-√ Test run with 0 tests in 0 suites passed after 0.001 seconds.
-
+Test Suite 'All tests' started at 2026-10-23 12:48:10.050.
+Test Suite 'ZoraCoreTests.xctest' started at 2026-10-23 12:48:10.053.
+Test Suite 'ImagingTests' started at 2026-10-23 12:48:10.053.
+Test Case '-[ZoraCoreTests.ImagingTests testIdentityCubeAndInvalidRows]' started.
+Test Case '-[ZoraCoreTests.ImagingTests testIdentityCubeAndInvalidRows]' passed (0.003 seconds).
+Test Case '-[ZoraCoreTests.ImagingTests testMonitorHistogramAndClipping]' started.
+Test Case '-[ZoraCoreTests.ImagingTests testMonitorHistogramAndClipping]' passed (0.001 seconds).
+Test Case '-[ZoraCoreTests.ImagingTests testPeakingFindsAnEdge]' started.
+Test Case '-[ZoraCoreTests.ImagingTests testPeakingFindsAnEdge]' passed (0.000 seconds).
+Test Case '-[ZoraCoreTests.ImagingTests testRecipeValidation]' started.
+Test Case '-[ZoraCoreTests.ImagingTests testRecipeValidation]' passed (0.000 seconds).
+Test Suite 'ImagingTests' passed at 2026-10-23 12:48:10.059.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.004 (0.006) seconds
+Test Suite 'NikonBluetoothTests' started at 2026-10-23 12:48:10.059.
+Test Case '-[ZoraCoreTests.NikonBluetoothTests testClientNameIsFixedASCIIAndRejectsOverflow]' started.
+Test Case '-[ZoraCoreTests.NikonBluetoothTests testClientNameIsFixedASCIIAndRejectsOverflow]' passed (0.000 seconds).
+Test Case '-[ZoraCoreTests.NikonBluetoothTests testLittleEndianFrameRoundTripPreservesUInt64]' started.
+Test Case '-[ZoraCoreTests.NikonBluetoothTests testLittleEndianFrameRoundTripPreservesUInt64]' passed (0.000 seconds).
+Test Case '-[ZoraCoreTests.NikonBluetoothTests testNewIdentityAndReconnectUseFreshChallenge]' started.
+Test Case '-[ZoraCoreTests.NikonBluetoothTests testNewIdentityAndReconnectUseFreshChallenge]' passed (0.004 seconds).
+Test Case '-[ZoraCoreTests.NikonBluetoothTests testOutOfOrderAndMalformedFramesRejected]' started.
+Test Case '-[ZoraCoreTests.NikonBluetoothTests testOutOfOrderAndMalformedFramesRejected]' passed (0.003 seconds).
+Test Case '-[ZoraCoreTests.NikonBluetoothTests testPublishedZ50IIChallengeVectorNotZ7IIHardwareTest]' started.
+Test Case '-[ZoraCoreTests.NikonBluetoothTests testPublishedZ50IIChallengeVectorNotZ7IIHardwareTest]' passed (0.003 seconds).
+Test Case '-[ZoraCoreTests.NikonBluetoothTests testReconnectIsBoundedAndBacksOff]' started.
+Test Case '-[ZoraCoreTests.NikonBluetoothTests testReconnectIsBoundedAndBacksOff]' passed (0.000 seconds).
+Test Case '-[ZoraCoreTests.NikonBluetoothTests testStandardBlowfishKnownAnswer]' started.
+Test Case '-[ZoraCoreTests.NikonBluetoothTests testStandardBlowfishKnownAnswer]' passed (0.002 seconds).
+Test Case '-[ZoraCoreTests.NikonBluetoothTests testTamperedChallengeNeverEnablesWake]' started.
+Test Case '-[ZoraCoreTests.NikonBluetoothTests testTamperedChallengeNeverEnablesWake]' passed (0.003 seconds).
+Test Case '-[ZoraCoreTests.NikonBluetoothTests testTimePayloadHandlesNegativeFractionalTimezone]' started.
+Test Case '-[ZoraCoreTests.NikonBluetoothTests testTimePayloadHandlesNegativeFractionalTimezone]' passed (0.001 seconds).
+Test Suite 'NikonBluetoothTests' passed at 2026-10-23 12:48:10.076.
+	 Executed 9 tests, with 0 failures (0 unexpected) in 0.016 (0.017) seconds
+Test Suite 'PipelineTests' started at 2026-10-23 12:48:10.076.
+Test Case '-[ZoraCoreTests.PipelineTests testImportOfflineRestartUploadThroughActualHTTPTransportWithExplicitURLProtocolFixture]' started.
+Test Case '-[ZoraCoreTests.PipelineTests testImportOfflineRestartUploadThroughActualHTTPTransportWithExplicitURLProtocolFixture]' passed (0.019 seconds).
+Test Suite 'PipelineTests' passed at 2026-10-23 12:48:10.095.
+	 Executed 1 test, with 0 failures (0 unexpected) in 0.019 (0.020) seconds
+Test Suite 'ProtocolTests' started at 2026-10-23 12:48:10.095.
+Test Case '-[ZoraCoreTests.ProtocolTests testCompleteTransactionDataPhase]' started.
+Test Case '-[ZoraCoreTests.ProtocolTests testCompleteTransactionDataPhase]' passed (0.000 seconds).
+Test Case '-[ZoraCoreTests.ProtocolTests testDeviceInfoCapabilities]' started.
+Test Case '-[ZoraCoreTests.ProtocolTests testDeviceInfoCapabilities]' passed (0.000 seconds).
+Test Case '-[ZoraCoreTests.ProtocolTests testFramerEverySplitBoundaryAndCoalescing]' started.
+Test Case '-[ZoraCoreTests.ProtocolTests testFramerEverySplitBoundaryAndCoalescing]' passed (0.000 seconds).
+Test Case '-[ZoraCoreTests.ProtocolTests testFramerRejectsUnderflowAndOversize]' started.
+Test Case '-[ZoraCoreTests.ProtocolTests testFramerRejectsUnderflowAndOversize]' passed (0.000 seconds).
+Test Case '-[ZoraCoreTests.ProtocolTests testInitializationHasGUIDNameAndVersion]' started.
+Test Case '-[ZoraCoreTests.ProtocolTests testInitializationHasGUIDNameAndVersion]' passed (0.000 seconds).
+Test Case '-[ZoraCoreTests.ProtocolTests testLiveViewHeaderAndTruncation]' started.
+Test Case '-[ZoraCoreTests.ProtocolTests testLiveViewHeaderAndTruncation]' passed (0.001 seconds).
+Test Case '-[ZoraCoreTests.ProtocolTests testOperationWireVector]' started.
+Test Case '-[ZoraCoreTests.ProtocolTests testOperationWireVector]' passed (0.000 seconds).
+Test Case '-[ZoraCoreTests.ProtocolTests testReaderTruncationDoesNotCrash]' started.
+Test Case '-[ZoraCoreTests.ProtocolTests testReaderTruncationDoesNotCrash]' passed (0.000 seconds).
+Test Case '-[ZoraCoreTests.ProtocolTests testScalarPropertyEnumGatesWrites]' started.
+Test Case '-[ZoraCoreTests.ProtocolTests testScalarPropertyEnumGatesWrites]' passed (0.000 seconds).
+Test Case '-[ZoraCoreTests.ProtocolTests testTransactionRejectsWrongIDAndLength]' started.
+Test Case '-[ZoraCoreTests.ProtocolTests testTransactionRejectsWrongIDAndLength]' passed (0.000 seconds).
+Test Suite 'ProtocolTests' passed at 2026-10-23 12:48:10.100.
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.003 (0.004) seconds
+Test Suite 'SessionTests' started at 2026-10-23 12:48:10.100.
+Test Case '-[ZoraCoreTests.SessionTests testCameraErrorPreservesSessionButOversizedTransferClosesIt]' started.
+Test Case '-[ZoraCoreTests.SessionTests testCameraErrorPreservesSessionButOversizedTransferClosesIt]' passed (0.001 seconds).
+Test Case '-[ZoraCoreTests.SessionTests testRealSessionPipelineOverExplicitProtocolFixture]' started.
+Test Case '-[ZoraCoreTests.SessionTests testRealSessionPipelineOverExplicitProtocolFixture]' passed (0.000 seconds).
+Test Case '-[ZoraCoreTests.SessionTests testRejectedHandshakeNeverConnects]' started.
+Test Case '-[ZoraCoreTests.SessionTests testRejectedHandshakeNeverConnects]' passed (0.000 seconds).
+Test Case '-[ZoraCoreTests.SessionTests testUnsupportedOperationSendsNothing]' started.
+Test Case '-[ZoraCoreTests.SessionTests testUnsupportedOperationSendsNothing]' passed (0.000 seconds).
+Test Suite 'SessionTests' passed at 2026-10-23 12:48:10.102.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.002 (0.002) seconds
+Test Suite 'StorageTests' started at 2026-10-23 12:48:10.102.
+Test Case '-[ZoraCoreTests.StorageTests testCorruptQueueIsNotSilentlyDiscarded]' started.
+Test Case '-[ZoraCoreTests.StorageTests testCorruptQueueIsNotSilentlyDiscarded]' passed (0.002 seconds).
+Test Case '-[ZoraCoreTests.StorageTests testCrashRecoveryOfUploadingJob]' started.
+Test Case '-[ZoraCoreTests.StorageTests testCrashRecoveryOfUploadingJob]' passed (0.002 seconds).
+Test Case '-[ZoraCoreTests.StorageTests testHMACRFC4231]' started.
+Test Case '-[ZoraCoreTests.StorageTests testHMACRFC4231]' passed (0.001 seconds).
+Test Case '-[ZoraCoreTests.StorageTests testHTTPUploadAgainstOptInLocalTLSFixture]' started.
+/Users/runner/work/PhotoLocationMap-source-for-github/PhotoLocationMap-source-for-github/Tests/ZoraCoreTests/StorageTests.swift:97: -[ZoraCoreTests.StorageTests testHTTPUploadAgainstOptInLocalTLSFixture] : Test skipped - Set ZORA_TEST_HTTPS to local trusted TLS fixture URL
+Test Case '-[ZoraCoreTests.StorageTests testHTTPUploadAgainstOptInLocalTLSFixture]' skipped (0.001 seconds).
+Test Case '-[ZoraCoreTests.StorageTests testLibraryImportPreservesRAWAndPersistsRecipe]' started.
+Test Case '-[ZoraCoreTests.StorageTests testLibraryImportPreservesRAWAndPersistsRecipe]' passed (0.003 seconds).
+Test Case '-[ZoraCoreTests.StorageTests testOfflineQueueRestartsDeduplicatesAndCompletes]' started.
+Test Case '-[ZoraCoreTests.StorageTests testOfflineQueueRestartsDeduplicatesAndCompletes]' passed (0.002 seconds).
+Test Case '-[ZoraCoreTests.StorageTests testS3CanonicalPathEncodesReservedCharacters]' started.
+Test Case '-[ZoraCoreTests.StorageTests testS3CanonicalPathEncodesReservedCharacters]' passed (0.002 seconds).
+Test Case '-[ZoraCoreTests.StorageTests testS3SigningFixedVector]' started.
+Test Case '-[ZoraCoreTests.StorageTests testS3SigningFixedVector]' passed (0.001 seconds).
+Test Case '-[ZoraCoreTests.StorageTests testSHA256PublishedVectors]' started.
+Test Case '-[ZoraCoreTests.StorageTests testSHA256PublishedVectors]' passed (0.373 seconds).
+Test Case '-[ZoraCoreTests.StorageTests testTargetEncodesUnicodeAndRejectsHTTPTraversal]' started.
+Test Case '-[ZoraCoreTests.StorageTests testTargetEncodesUnicodeAndRejectsHTTPTraversal]' passed (0.000 seconds).
+Test Case '-[ZoraCoreTests.StorageTests testTransientFailureBackoffAndPermanentAuthFailure]' started.
+Test Case '-[ZoraCoreTests.StorageTests testTransientFailureBackoffAndPermanentAuthFailure]' passed (0.005 seconds).
+Test Suite 'StorageTests' passed at 2026-10-23 12:48:10.495.
+	 Executed 11 tests, with 1 test skipped and 0 failures (0 unexpected) in 0.391 (0.393) seconds
+Test Suite 'ZoraCoreTests.xctest' passed at 2026-10-23 12:48:10.495.
+	 Executed 39 tests, with 1 test skipped and 0 failures (0 unexpected) in 0.436 (0.442) seconds
+Test Suite 'All tests' passed at 2026-10-23 12:48:10.495.
+	 Executed 39 tests, with 1 test skipped and 0 failures (0 unexpected) in 0.436 (0.445) seconds

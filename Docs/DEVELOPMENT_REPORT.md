@@ -1,8 +1,10 @@
 # ZORA Camera 开发报告
 
-日期：2026-10-22（Asia/Shanghai）。本报告区分源码完成、自动测试和硬件验证。
+日期：2026-10-23（Asia/Shanghai），0.2.0。本报告区分源码完成、自动测试和硬件验证。
 
 后续更新：已接入用户提供的 GitHub 仓库，成功通过 Xcode 27 真机 Release 归档并生成未签名 IPA。详见 `IPA_DELIVERY.md`；下文的本地环境描述保留为最初 Windows 开发阶段记录，已不代表当前完全没有 iOS 编译证据。
+
+本次已新增原生 BLE GATT 认证与 Wi-Fi 唤醒链路、自动重连/恢复、钥匙串相机资料、电量/校时和连接诊断。实现、研究来源、许可证和逐项硬件边界见 `BLUETOOTH_AND_WAKE.md`。当前核心测试 39 项（38 通过、1 跳过），最终相机代码提交 `6e89dfa377d577faccbab063580186e7302d5fa8` 已通过 Xcode 27.1 真机归档。
 
 ## 交付物
 
@@ -26,13 +28,13 @@
 
 ## 测试证据
 
-实际执行结果见 `TEST_RESULTS.txt`；报告中不把“有测试文件”写成“测试已通过”。Swift 核心测试会实际编译生产代码；协议和 HTTP 测试明确使用 synthetic fixtures。iOS 文件可在 Windows 做 Swift 语法解析，但未做 Apple SDK 类型检查、链接、运行或 UI 截图验证。
+实际执行结果见 `TEST_RESULTS.txt`；报告中不把“有测试文件”写成“测试已通过”。Swift 核心测试会实际编译生产代码；协议和 HTTP 测试明确使用 synthetic fixtures。iOS 源码已完成云端 Apple SDK 类型检查、链接、模拟器编译及真机归档；UI 自动化单独记录，不由编译成功推断。
 
 首轮编译捕获了 CameraProperty 初始化闭包过早捕获 self，已修复后重测。Mac 和硬件检查都保留在 `HARDWARE_ACCEPTANCE.md`，不自动勾选。
 
 ## 尚未完成及下一阶段
 
-优先拿到 Mac/iOS 27 SDK 构建结果及 Z7 II 固件/网络模式数据；完成 PTP/IP 接受性与 Nikon 私有认证研究。若相机拒绝通用协议，需要合法、可审查的 Nikon 协议或 SDK 平台授权后补充适配；当前源码不会将失败变为模拟成功。
+Mac/iOS 27 SDK 编译证据已获得，Nikon 私有认证已根据可审查 MIT 来源移植。下一步需要 Z7 II 固件/网络模式数据和硬件验收；若相机方言不同，继续补充真实适配，当前源码不会将失败变为模拟成功。
 
 随后落实大文件分块下载/流式摘要/S3 multipart、后台 URLSession 与 BGTaskScheduler、远端校验、事件照片同步、更多相机控制、视频/触摸对焦/拍摄计划、NAS 配置删除/队列清理、文件保护与恢复策略，以及真机性能和可访问性验收。机内云创功能不能靠 App 绕过硬件/固件兼容性，继续采用独立手机端处理路线。
 

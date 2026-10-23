@@ -1,21 +1,22 @@
 # IPA 构建交付记录
 
-2026-10-22 11:55（Asia/Shanghai），云端 Xcode 27.0 / iOS 27.0 SDK 已成功编译、链接并归档 ARM64 真机版本。
+2026-10-23 20:48（Asia/Shanghai），云端 Xcode 27.1 / iOS 27.1 SDK 成功编译、链接并归档 0.2.0 ARM64 真机版本。
 
-- 文件：`ZORACamera-unsigned.ipa`
-- 版本：0.1.0 / Bundle ID `app.zora.camera`
+- 文件：`ZORACamera-0.2-unsigned.ipa`（同时更新通用文件名 `ZORACamera-unsigned.ipa`）
+- 版本：0.2.0 / build 2 / Bundle ID `app.zora.camera`
 - 最低系统：iOS 27.0，架构 ARM64，平台 iPhoneOS
-- 大小：314610 字节；主可执行文件 808680 字节
-- SHA256：`2b6e1675ff5cb574dc08d47da36d0e5303b0db312b2585602f01e2f98c8952ac`
-- 签名：未签名，`signature_verified=false`，需要匹配的签名与描述文件后安装
-- 构建源码提交：`75bb48482f4bea4700d3875633ec5213a9059faa`
-- [成功的 IPA 构建](https://github.com/lbh5240/PhotoLocationMap-source-for-github/actions/runs/39719265363)
-- [GitHub 构建产物](https://github.com/lbh5240/PhotoLocationMap-source-for-github/actions/runs/39719265363/artifacts/12400342702)（默认保留14天）
+- 大小：409965 字节；主可执行文件 1051696 字节
+- SHA256：`fc309a355dacb26a7345970a08bf0fa6b9dc45eed8f83f5a06541db0a00f27de`
+- 签名：未签名，`signature_verified=false`，需要有效签名及匹配描述文件后安装
+- 最终相机代码提交：`6e89dfa377d577faccbab063580186e7302d5fa8`
+- [成功的 IPA 构建](https://github.com/lbh5240/PhotoLocationMap-source-for-github/actions/runs/39955966574)
+- [GitHub 构建产物](https://github.com/lbh5240/PhotoLocationMap-source-for-github/actions/runs/39955966574/artifacts/12502831207)（默认保留14天）
+- 外层 artifact SHA256：`f0970434b7f8b3bbadf79e1e82a8a59f5674813405f39da8a1e1e29ad5b2fcf5`
 
-下载后已再次核对外层 artifact 哈希与内部 IPA 报告哈希，并解析 Payload、Info.plist、Mach-O ARM64 与 LC_BUILD_VERSION 的 iOS 设备标识。没有将源码包或模拟器 App 当成 IPA。
+已再次核对外层 ZIP 与内部 IPA 哈希，并解析 Payload、Info.plist、Mach-O ARM64 与 LC_BUILD_VERSION 的 iOS 设备平台标识。另确认 MIT 许可证随 App bundle 打包、版本 0.2.0、后台 bluetooth-central 声明存在。
 
-云端核心 XCTest 共30项，29通过、1个真实 HTTPS 服务测试明确跳过、0失败。打包检查在 macOS 上5通过，非Mac环境检查按设计跳过。iOS Debug 模拟器构建通过；自动界面测试另见最新 CI 结果，不以归档成功替代 UI 或硬件验证。
+云端核心 XCTest 39 项：38 通过、1 个真实 HTTPS 服务测试因没有配置明确跳过、0 失败。打包检查 macOS 5 通过、非 Mac 检查跳过；Windows 6 项全部通过。模拟器构建与 UI 执行结果见 `TEST_SUMMARY.md`。
 
-为通过真实 Xcode 构建，已修复 Core Image 矩形尺寸类型、SwiftUI 自定义颜色推导和带 footer 的 Section 初始化；CI 明确选择 ARM64 模拟器架构，避免静态包的跨架构产物混用。
+本版增加的蓝牙认证、Wi-Fi 唤醒和自动连接链路见 `BLUETOOTH_AND_WAKE.md`。没有 Apple 签名材料，没有运行 iPhone/Z7 II/NAS 实机联调；系统配对、Hotspot entitlement、休眠/关机唤醒和电量/校时仍需真机验收。
 
-本次未提供 Apple 签名材料，没有运行签名安装、iPhone/Z7 II/NAS 实机联调。签名服务若不支持 Hotspot Configuration，App 内自动加入 Wi-Fi 能力也可能不可用。实验协议与未完成功能的限制继续以 README 和通信矩阵为准。
+源码 ZIP 包含工程、测试、许可证、研究报告和验收清单。`Docs/SOURCE_SHA256.json` 记录交付源码内容哈希，自身不参与哈希。
