@@ -71,7 +71,7 @@ import ZoraCore
         if central.state == .poweredOn { reconnectSaved() }
     }
     func scan() {
-        guard !working else { return }
+        guard !working, !authenticated else { return }
         userDisconnected = false; scanRequested = true; nearby = []; retryTask?.cancel(); scanTask?.cancel()
         let central = manager()
         guard central.state == .poweredOn else { resumeRequested = false; status = "等待蓝牙授权或开启…"; return }
@@ -85,7 +85,7 @@ import ZoraCore
         }
     }
     func connect(_ id: UUID) {
-        guard !working else { return }
+        guard !working, !authenticated else { return }
         guard manager().state == .poweredOn else { status = "请先开启蓝牙"; return }
         scanRequested = false
         userDisconnected = false; retryTask?.cancel(); scanTask?.cancel(); central?.stopScan()
@@ -200,7 +200,7 @@ import ZoraCore
     private func clear(_ error: Error) {
         let values = pending.values.map { $0.1 }; pending.removeAll()
         for c in values { c.resume(throwing: error) }
-        handshake = nil; characteristics = [:]; frames = []; working = false
+        handshake = nil; characteristics = [:]; frames = []; working = false; battery = nil
     }
     private func fail(_ error: Error) {
         sessionToken = UUID()

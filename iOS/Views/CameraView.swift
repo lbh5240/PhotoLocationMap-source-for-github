@@ -162,11 +162,11 @@ struct ConnectionView: View {
                 Section("1 · 蓝牙配对与唤醒") {
                     Text("首次连接：在 Z7 II 中开启“连接至智能设备 → 配对（蓝牙）”，再扫描并选择相机。按系统和相机提示确认配对码。")
                     Label(bluetooth.status, systemImage: bluetooth.authenticated ? "checkmark.shield" : "antenna.radiowaves.left.and.right").font(.caption)
-                    Button("搜索 Nikon 相机", systemImage: "dot.radiowaves.left.and.right") { bluetooth.scan() }.disabled(bluetooth.working)
+                    Button("搜索 Nikon 相机", systemImage: "dot.radiowaves.left.and.right") { bluetooth.scan() }.disabled(bluetooth.working || bluetooth.authenticated)
                     ForEach(bluetooth.nearby.sorted(by: { $0.rssi > $1.rssi })) { item in
                         Button { bluetooth.connect(item.id) } label: {
                             HStack { Text(item.name); Spacer(); Text("\(item.rssi) dBm").font(.caption).foregroundStyle(.secondary) }
-                        }.disabled(bluetooth.working)
+                        }.disabled(bluetooth.working || bluetooth.authenticated)
                     }
                     if bluetooth.identity != nil {
                         Button("重连已保存相机") { bluetooth.retrySaved() }.disabled(bluetooth.working || bluetooth.authenticated)
