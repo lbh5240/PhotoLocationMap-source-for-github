@@ -84,6 +84,14 @@ struct CameraWiFiProfile: Codable {
     func wakeAndConnect() async throws {
         guard foreground else { throw ZoraError.unsupported("请回到前台完成相机 Wi-Fi 连接") }
         let profile = try Keychain.loadValue(CameraWiFiProfile.self, id: "nikon.wifi")
+        let generation = connectivity.bluetooth.automationGeneration
+        func checkConnectionIntent() throws {
+            try Task.checkCancellation()
+            guard foreground, generation == connectivity.bluetooth.automationGeneration,
+                  profile.peripheralID == connectivity.bluetooth.identity?.peripheralID else {
+                throw ZoraError.unsupported("自动连接已停止，请在前台重新选择相机")
+            }
+        }
         guard profile.peripheralID == connectivity.bluetooth.identity?.peripheralID else { throw ZoraError.unsupported("Wi-Fi 资料属于另一台相机，请重新保存") }
         connectionProgress = "1/3 · 发送蓝牙唤醒请求"
         defer { connectionProgress = nil }
@@ -91,8 +99,7 @@ struct CameraWiFiProfile: Codable {
         connectionProgress = "2/3 · 等待相机热点 · 请允许 iOS 加入网络"
         var joinError: Error?
         for delay in [2, 3, 5] {
-            try await Task.sleep(for: .seconds(delay)); try Task.checkCancellation()
-            guard foreground else { throw ZoraError.unsupported("已暂停自动连接，请回到前台重试") }
+            try await Task.sleep(for: .seconds(delay)); try checkConnectionIntent()
             do { try await connectivity.join(ssid: profile.ssid, password: profile.password); joinError = nil; break }
             catch {
                 joinError = error
@@ -106,9 +113,13 @@ struct CameraWiFiProfile: Codable {
         connectionProgress = "3/3 · 验证真实 PTP 相机会话"
         var lastError: Error = ZoraError.disconnected
         for _ in 0..<4 {
-            try Task.checkCancellation()
-            guard foreground else { throw ZoraError.unsupported("已暂停自动连接，请回到前台重试") }
-            do { try await connect(host: profile.host); return } catch { lastError = error }
+            try checkConnectionIntent()
+            do {
+                try await connect(host: profile.host)
+                do { try checkConnectionIntent() }
+                catch { try? await disconnect(); throw error }
+                return
+            } catch { lastError = error }
             try await Task.sleep(for: .seconds(2))
         }
         throw lastError

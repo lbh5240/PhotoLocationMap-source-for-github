@@ -19,6 +19,7 @@ import ZoraCore
     private(set) var identity: NikonBLEIdentity?
     private(set) var diagnostics: [String] = []
     private(set) var working = false
+    private(set) var automationGeneration = UUID()
     var autoReconnect = UserDefaults.standard.object(forKey: "bleAutoReconnect") as? Bool ?? true {
         didSet { UserDefaults.standard.set(autoReconnect, forKey: "bleAutoReconnect"); if !autoReconnect { retryTask?.cancel() } }
     }
@@ -31,12 +32,14 @@ import ZoraCore
     private var sessionToken = UUID()
     private var handshake: NikonBLEHandshake?
     private var scanTask: Task<Void, Never>?
+    private var pairingTask: Task<Void, Never>?
     private var retryTask: Task<Void, Never>?
     private var keepAlive: Task<Void, Never>?
     private var retryAttempt = 0
     private var userDisconnected = false
     private var foreground = true
     private var resumeRequested = false
+    private var scanRequested = false
     var onAuthenticated: (@MainActor () -> Void)?
     var authenticated: Bool { state == .authenticated }
 
@@ -69,9 +72,10 @@ import ZoraCore
     }
     func scan() {
         guard !working else { return }
-        userDisconnected = false; nearby = []; retryTask?.cancel(); scanTask?.cancel()
+        userDisconnected = false; scanRequested = true; nearby = []; retryTask?.cancel(); scanTask?.cancel()
         let central = manager()
-        guard central.state == .poweredOn else { resumeRequested = false; status = "等待蓝牙授权/开启后，再点扫描"; return }
+        guard central.state == .poweredOn else { resumeRequested = false; status = "等待蓝牙授权或开启…"; return }
+        scanRequested = false
         state = .scanning; status = "搜索 Nikon 相机 · 请打开相机配对菜单"
         central.scanForPeripherals(withServices: foreground ? nil : [Self.service], options: nil)
         scanTask = Task { [weak self] in
@@ -82,13 +86,16 @@ import ZoraCore
     }
     func connect(_ id: UUID) {
         guard !working else { return }
+        guard manager().state == .poweredOn else { status = "请先开启蓝牙"; return }
+        scanRequested = false
         userDisconnected = false; retryTask?.cancel(); scanTask?.cancel(); central?.stopScan()
         guard let p = devices[id] ?? manager().retrievePeripherals(withIdentifiers: [id]).first else { status = "相机不可达，请重新扫描"; return }
         working = true; state = .connecting; status = "连接蓝牙链路…"; peripheral = p; p.delegate = self
         let token = UUID(); sessionToken = token
         characteristics = [:]; frames = []; handshake = nil; battery = nil
         log("开始 BLE 连接（不记录配对密钥或密码）")
-        Task { [weak self] in
+        pairingTask?.cancel()
+        pairingTask = Task { [weak self] in
             guard let self else { return }
             do {
                 _ = try await operation("connect", timeout: 30) {
@@ -125,9 +132,10 @@ import ZoraCore
         }
     }
     private func operation(_ key: String, timeout: Int = 15, start: () -> Void) async throws -> Data {
+        try Task.checkCancellation()
         guard pending[key] == nil else { throw ZoraError.busy }
         let token = UUID()
-        return try await withCheckedThrowingContinuation { c in
+        let result: Data = try await withCheckedThrowingContinuation { c in
             pending[key] = (token, c)
             Task { [weak self] in
                 try? await Task.sleep(for: .seconds(timeout))
@@ -136,12 +144,15 @@ import ZoraCore
             }
             start()
         }
+        try Task.checkCancellation()
+        return result
     }
     private func finish(_ key: String, data: Data = Data(), error: Error? = nil) {
         guard let (_, c) = pending.removeValue(forKey: key) else { return }
         if let error { c.resume(throwing: error) } else { c.resume(returning: data) }
     }
     private func nextFrame() async throws -> Data {
+        try Task.checkCancellation()
         if !frames.isEmpty { return frames.removeFirst() }
         return try await operation("frame", timeout: 45) {}
     }
@@ -180,7 +191,8 @@ import ZoraCore
     }
     func disconnect(forget: Bool = false) {
         sessionToken = UUID()
-        userDisconnected = true; retryTask?.cancel(); scanTask?.cancel(); keepAlive?.cancel(); central?.stopScan()
+        automationGeneration = UUID(); pairingTask?.cancel()
+        userDisconnected = true; scanRequested = false; retryTask?.cancel(); scanTask?.cancel(); keepAlive?.cancel(); central?.stopScan()
         if let p = peripheral { central?.cancelPeripheralConnection(p) }
         clear(ZoraError.disconnected); peripheral = nil; state = .disconnected; status = "蓝牙已断开"; battery = nil
         if forget { Keychain.delete(id: "nikon.ble.identity"); Keychain.delete(id: "nikon.wifi"); identity = nil; status = "本机配对资料已移除；系统绑定请在蓝牙设置中忽略设备" }
@@ -192,6 +204,7 @@ import ZoraCore
     }
     private func fail(_ error: Error) {
         sessionToken = UUID()
+        pairingTask?.cancel()
         let old = peripheral; peripheral = nil
         clear(error); state = .failed; status = error.localizedDescription; log(status); keepAlive?.cancel()
         if let old { central?.cancelPeripheralConnection(old) }
@@ -207,7 +220,7 @@ import ZoraCore
         }
     }
     private func reconnectSaved() {
-        guard let identity, !working, !authenticated, !userDisconnected else { return }
+        guard let identity, central?.state == .poweredOn, !working, !authenticated, !userDisconnected else { return }
         resumeRequested = false; connect(identity.peripheralID)
     }
     func retrySaved() { userDisconnected = false; retryAttempt = 0; resumeRequested = true; let c = manager(); if c.state == .poweredOn { reconnectSaved() } }
@@ -224,10 +237,13 @@ import ZoraCore
     }
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         guard central.state == .poweredOn else {
+            pairingTask?.cancel()
+            retryTask?.cancel(); keepAlive?.cancel()
             clear(ZoraError.disconnected); peripheral = nil; state = .disconnected
             status = central.state == .unauthorized ? "请在设置中允许 ZORA 使用蓝牙" : "请开启蓝牙后重试"; return
         }
-        if resumeRequested { reconnectSaved() }
+        if scanRequested { scan() }
+        else if resumeRequested || (autoReconnect && identity != nil && !userDisconnected) { reconnectSaved() }
     }
     func centralManager(_ central: CBCentralManager, didDiscover p: CBPeripheral, advertisementData: [String: Any], rssi RSSI: NSNumber) {
         let manufacturer = advertisementData[CBAdvertisementDataManufacturerDataKey] as? Data
