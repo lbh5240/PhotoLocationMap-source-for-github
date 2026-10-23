@@ -15,6 +15,7 @@ jobs:
         run: swift test
   ios:
     runs-on: xcode-27
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - name: Xcode environment (requires iOS 27 SDK)
@@ -30,10 +31,21 @@ jobs:
           devices=json.loads(subprocess.check_output(['xcrun','simctl','list','devices','available','--json']))['devices']
           choices=[d for runtime,items in devices.items() if 'iOS-27' in runtime for d in items if d['name'].startswith('iPhone')]
           if not choices: raise SystemExit('Install an iOS 27 simulator runtime before UI testing.')
+          choices.sort(key=lambda d: d.get('state') != 'Booted')
           with open(os.environ['GITHUB_ENV'],'a') as f: f.write('ZORA_SIMULATOR='+choices[0]['udid']+'\n')
           PY
+      - name: Boot simulator before XCTest
+        timeout-minutes: 4
+        run: |
+          python3 - <<'PY'
+          import os, subprocess
+          device=os.environ['ZORA_SIMULATOR']
+          subprocess.run(['xcrun','simctl','boot',device],check=False,timeout=30)
+          subprocess.run(['xcrun','simctl','bootstatus',device,'-b'],check=True,timeout=180)
+          PY
       - name: Native UI smoke tests
-        run: xcodebuild -project ZORACamera.xcodeproj -scheme ZORACamera -destination "platform=iOS Simulator,id=$ZORA_SIMULATOR" -resultBundlePath TestResults/UI.xcresult ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO test
+        timeout-minutes: 8
+        run: xcodebuild -project ZORACamera.xcodeproj -scheme ZORACamera -destination "platform=iOS Simulator,id=$ZORA_SIMULATOR" -destination-timeout 180 -parallel-testing-enabled NO -maximum-concurrent-test-simulator-destinations 1 -resultBundlePath TestResults/UI.xcresult ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- test
       - uses: actions/upload-artifact@v4
         if: always()
         with:
