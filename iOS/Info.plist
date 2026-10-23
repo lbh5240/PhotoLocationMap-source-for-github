@@ -6,11 +6,12 @@
     <key>CFBundleIdentifier</key><string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
     <key>CFBundleName</key><string>$(PRODUCT_NAME)</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>0.2.0</string>
-    <key>CFBundleVersion</key><string>2</string>
+    <key>CFBundleShortVersionString</key><string>0.3.0</string>
+    <key>CFBundleVersion</key><string>3</string>
     <key>LSRequiresIPhoneOS</key><true/>
-    <key>NSLocalNetworkUsageDescription</key><string>连接你选择的 Nikon 相机与 NAS，进行实时取景、遥控及照片备份。</string>
-    <key>NSBluetoothAlwaysUsageDescription</key><string>连接你选择的 Nikon 相机、完成蓝牙认证、恢复连接、请求 Wi-Fi 唤醒并同步时间与电量。</string>
+    <key>NSLocalNetworkUsageDescription</key><string>������ѡ��� Nikon ����� NAS������ʵʱȡ����ң�ؼ���Ƭ���ݡ�</string>
+    <key>NSBluetoothAlwaysUsageDescription</key><string>������ѡ��� Nikon ��������������֤���ָ����ӡ����� Wi-Fi ���Ѳ�ͬ��ʱ���������</string>
+    <key>NSCameraUsageDescription</key><string>����ͨ�� USB ���������ӵ� Nikon ��������ڶ�ȡ��Ƭ��ʵʱȡ���������������ң�����㡣</string>
     <key>UIBackgroundModes</key><array><string>bluetooth-central</string></array>
     <key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
     <key>UIApplicationSceneManifest</key><dict><key>UIApplicationSupportsMultipleScenes</key><false/></dict>

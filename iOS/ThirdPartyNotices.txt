@@ -1,7 +1,8 @@
 ZORA Camera Bluetooth protocol adaptation
 Source: https://github.com/jaminxx-aha/ZPill
 Revision: 76d4c8ed6bce0da1a962ffc7fc9e7ccc8e1f3afd
-Files studied: pairing_engine.dart, pairing_message.dart, blowfish_hasher.dart, gatt_uuids.dart, time_payload.dart
+Files studied: pairing_engine.dart, pairing_message.dart, blowfish_hasher.dart, gatt_uuids.dart, time_payload.dart, UsbHostPlugin.swift, operation_codes.dart, ptp_session.dart
+USB uses a new native async transport with real OS session completion; no synthetic OpenSession/CloseSession acknowledgments.
 
 MIT License
 

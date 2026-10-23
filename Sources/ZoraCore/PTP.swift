@@ -4,6 +4,10 @@ public enum PTPOperation {
     public static let deviceInfo: UInt16 = 0x1001, openSession: UInt16 = 0x1002, closeSession: UInt16 = 0x1003
     public static let storageIDs: UInt16 = 0x1004, objectHandles: UInt16 = 0x1007, objectInfo: UInt16 = 0x1008
     public static let getObject: UInt16 = 0x1009, capture: UInt16 = 0x100E
+    public static let storageInfo: UInt16 = 0x1005, thumbnail: UInt16 = 0x100A, partialObject: UInt16 = 0x101B
+    public static let manualFocus: UInt16 = 0x9204, captureToCard: UInt16 = 0x9207, vendorStorageIDs: UInt16 = 0x9209
+    public static let startMovie: UInt16 = 0x920A, endMovie: UInt16 = 0x920B, terminateCapture: UInt16 = 0x920C
+    public static let remoteControl: UInt16 = 0x90C2, deviceReady: UInt16 = 0x90C8
     public static let propertyDescription: UInt16 = 0x1014, propertyValue: UInt16 = 0x1015, setProperty: UInt16 = 0x1016
     public static let startLiveView: UInt16 = 0x9201, endLiveView: UInt16 = 0x9202, liveViewImage: UInt16 = 0x9203
     public static let autoFocus: UInt16 = 0x90C1
@@ -70,6 +74,8 @@ public struct CameraDeviceInfo: Sendable, Equatable {
     public var canLiveView: Bool {
         vendor == 0xA && [PTPOperation.startLiveView, PTPOperation.endLiveView, PTPOperation.liveViewImage].allSatisfy(operations.contains)
     }
+    public var canCapture: Bool { operations.contains(PTPOperation.captureToCard) || operations.contains(PTPOperation.capture) }
+    public var canRecordMovie: Bool { [PTPOperation.startMovie, PTPOperation.endMovie].allSatisfy(operations.contains) }
 }
 
 public struct CameraObject: Identifiable, Sendable {
@@ -98,7 +104,7 @@ public struct PTPTransaction: Sendable {
         case 9:
             guard expected == nil, try r.integer(UInt32.self) == id else { throw ZoraError.malformed("StartData transaction") }
             expected = try r.integer(UInt64.self)
-            guard expected! <= UInt64(PTPFramer.maximumPacket) else { throw ZoraError.unsupported("单次相机文件下载上限为 64 MiB") }
+            guard expected! <= UInt64(PTPFramer.maximumPacket) else { throw ZoraError.unsupported("��������ļ���������Ϊ 64 MiB") }
         case 10, 12:
             guard expected != nil, !ended, try r.integer(UInt32.self) == id else { throw ZoraError.malformed("Data transaction") }
             let bytes = try r.bytes(packet.payload.count - 4)

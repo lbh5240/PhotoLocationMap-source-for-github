@@ -4,17 +4,26 @@ import XCTest
     func testDisconnectedCameraDoesNotPresentFakeLiveView() {
         let app = XCUIApplication(); app.launch()
         XCTAssertTrue(app.buttons["connectCamera"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.staticTexts["等待你的 Nikon Z7 II"].exists)
-        XCTAssertFalse(app.buttons["释放快门"].isEnabled)
+        XCTAssertTrue(app.staticTexts["�ȴ���� Nikon Z7 II"].exists)
+        XCTAssertFalse(app.buttons["�ͷſ���"].isEnabled)
         app.buttons["connectCamera"].tap()
-        XCTAssertTrue(app.buttons["搜索 Nikon 相机"].waitForExistence(timeout: 3))
-        XCTAssertFalse(app.staticTexts["Nikon 蓝牙认证完成"].exists)
+        XCTAssertTrue(app.buttons["���� Nikon ���"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.staticTexts["Nikon ������֤���"].exists)
     }
     func testLibraryAndLooksNavigation() {
         let app = XCUIApplication(); app.launch()
-        app.tabBars.buttons["照片"].tap()
+        app.tabBars.buttons["��Ƭ"].tap()
         XCTAssertTrue(app.buttons["importPhotos"].waitForExistence(timeout: 5))
-        app.tabBars.buttons["风格"].tap()
-        XCTAssertTrue(app.staticTexts["琥珀日光"].waitForExistence(timeout: 5))
+        app.tabBars.buttons["���"].tap()
+        XCTAssertTrue(app.staticTexts["�����չ�"].waitForExistence(timeout: 5))
+    }
+    func testUSBSimulatorNeverPretendsACameraIsConnected() {
+        let app = XCUIApplication(); app.launch()
+        XCTAssertTrue(app.buttons["connectCamera"].waitForExistence(timeout: 10))
+        app.buttons["connectCamera"].tap()
+        app.segmentedControls["connectionMode"].buttons["USB ����"].tap()
+        app.buttons["searchUSBCamera"].tap()
+        XCTAssertTrue(app.staticTexts["ģ��������������ʵ USB �������ʹ�� iPhone / iPad"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["�Ͽ� USB �Ự"].exists)
     }
 }

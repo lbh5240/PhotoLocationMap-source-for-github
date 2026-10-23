@@ -8,6 +8,7 @@ struct CameraView: View {
     @State private var grid = true
     @State private var peaking = false
     @State private var zebra = false
+    @State private var focusSteps = 100
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -15,11 +16,11 @@ struct CameraView: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("ZORA").font(.system(size: 28, weight: .black, design: .rounded)).tracking(5)
-                            Text("把目光，留给此刻。").font(.caption).foregroundStyle(.secondary)
+                            Text("��Ŀ�⣬�����˿̡�").font(.caption).foregroundStyle(.secondary)
                         }
                         Spacer()
                         Button { connecting = true } label: {
-                            Label(model.device == nil ? "连接相机" : model.device!.model, systemImage: model.device == nil ? "wifi.slash" : "wifi")
+                            Label(model.device == nil ? "�������" : model.device!.model, systemImage: model.device == nil ? "wifi.slash" : "wifi")
                                 .font(.caption.weight(.medium)).padding(12).zoraGlass()
                         }.accessibilityIdentifier("connectCamera")
                     }
@@ -34,58 +35,87 @@ struct CameraView: View {
                             } else {
                                 VStack(spacing: 12) {
                                     Image(systemName: "viewfinder").font(.system(size: 46, weight: .ultraLight)).foregroundStyle(Color.zoraAmber)
-                                    Text(model.device == nil ? "等待你的 Nikon Z7 II" : "准备开始实时取景").font(.headline)
-                                    Text("画面仅在相机返回真实图像后显示").font(.caption).foregroundStyle(.secondary)
+                                    Text(model.device == nil ? "�ȴ���� Nikon Z7 II" : "׼����ʼʵʱȡ��").font(.headline)
+                                    Text("����������������ʵͼ�����ʾ").font(.caption).foregroundStyle(.secondary)
                                 }.padding()
                             }
                         }.aspectRatio(3/2, contentMode: .fit).clipShape(RoundedRectangle(cornerRadius: 22))
                         HStack {
-                            Label(model.streaming ? "LIVE · 相机画面" : "STANDBY", systemImage: model.streaming ? "circle.fill" : "circle")
+                            Label(model.streaming ? "LIVE �� �������" : "STANDBY", systemImage: model.streaming ? "circle.fill" : "circle")
                                 .foregroundStyle(model.streaming ? Color.zoraAmber : .secondary)
                             Spacer()
-                            Text("NIKON Z7 II · 实验驱动").foregroundStyle(.secondary)
+                            Text("NIKON Z7 II �� ʵ������").foregroundStyle(.secondary)
                         }.font(.system(size: 10, weight: .medium, design: .monospaced)).padding(.top, 10)
                     }
                     HStack(spacing: 14) {
-                        monitorButton("网格", icon: "grid", enabled: $grid)
-                        monitorButton("峰值", icon: "waveform.path", enabled: $peaking)
-                        monitorButton("斑马纹", icon: "line.3.horizontal", enabled: $zebra)
+                        monitorButton("����", icon: "grid", enabled: $grid)
+                        monitorButton("��ֵ", icon: "waveform.path", enabled: $peaking)
+                        monitorButton("������", icon: "line.3.horizontal", enabled: $zebra)
                     }
                     if let preview = model.preview, model.streaming {
                         VStack(alignment: .leading, spacing: 8) {
                             HistogramView(bins: preview.histogram).frame(height: 52)
-                            Text("预览直方图 · 高亮像素 \(preview.clippedFraction*100, specifier: "%.1f")% · 监看基于显示图像")
+                            Text("Ԥ��ֱ��ͼ �� �������� \(preview.clippedFraction*100, specifier: "%.1f")% �� �࿴������ʾͼ��")
                                 .font(.caption2).foregroundStyle(.secondary)
                         }.zoraPanel()
                     }
                     HStack(spacing: 32) {
                         Button { model.perform { await model.stopStream(); try await model.camera.autoFocus() } } label: { Image(systemName: "scope").font(.title2) }
-                            .disabled(model.device?.operations.contains(PTPOperation.autoFocus) != true || model.busy).accessibilityLabel("自动对焦")
+                            .disabled(model.device?.operations.contains(PTPOperation.autoFocus) != true || model.busy).accessibilityLabel("�Զ��Խ�")
                         Button { model.perform { try await model.capture() } } label: {
                             Circle().fill(Color.zoraAmber).frame(width: 68, height: 68)
                                 .padding(6).overlay(Circle().stroke(.white.opacity(0.65), lineWidth: 2))
-                        }.disabled(model.device?.operations.contains(PTPOperation.capture) != true || model.busy).accessibilityLabel("释放快门")
+                        }.disabled(model.device?.canCapture != true || model.busy).accessibilityLabel("�ͷſ���")
                         Button { model.perform { if model.streaming { await model.stopStream() } else { try await model.startStream() } } } label: {
                             Image(systemName: model.streaming ? "stop.circle" : "play.circle").font(.title)
-                        }.disabled(model.device?.canLiveView != true || model.busy).accessibilityLabel(model.streaming ? "停止取景" : "开始取景")
+                        }.disabled(model.device?.canLiveView != true || model.busy).accessibilityLabel(model.streaming ? "ֹͣȡ��" : "��ʼȡ��")
                     }.padding(14).frame(maxWidth: .infinity).zoraGlass()
+                    if let device = model.device {
+                        VStack(alignment: .leading, spacing: 14) {
+                            Label("\(model.connectionType ?? "���") �� ��չ����", systemImage: model.connectionType == "USB" ? "cable.connector" : "wifi").font(.headline)
+                            if device.operations.contains(PTPOperation.remoteControl) {
+                                Button(model.remoteControl ? "�ͷ��������" : "�ӹ��������") { model.perform { try await model.setRemoteControl(!model.remoteControl) } }.disabled(model.busy)
+                                Text("USB ȡ����������ܾ������Ƚӹܿ��ƣ��������ͷţ��ָ�����������") .font(.caption).foregroundStyle(.secondary)
+                            }
+                            if device.canRecordMovie {
+                                HStack {
+                                    Button("��ʼ¼��", systemImage: "record.circle") { model.perform { try await model.setMovieRecording(true) } }
+                                    Spacer()
+                                    Button("����¼��", systemImage: "stop.circle") { model.perform { try await model.setMovieRecording(false) } }
+                                }.disabled(model.busy)
+                                Text(model.recordingRequested ? "��ʼ¼��ָ���ѱ����ܣ��������ָʾȷ��¼��" : "�����������ѡ����Ƶģʽ���ٷ���¼��ָ��") .font(.caption).foregroundStyle(.secondary)
+                            }
+                            if device.operations.contains(PTPOperation.manualFocus) {
+                                Stepper("�������� \(focusSteps)", value: $focusSteps, in: 1...1000, step: 1)
+                                HStack {
+                                    Button("�������", systemImage: "arrow.down.right.and.arrow.up.left") { model.perform { try await model.driveFocus(near: true, steps: UInt32(focusSteps)) } }
+                                    Spacer()
+                                    Button("������Զ", systemImage: "arrow.up.left.and.arrow.down.right") { model.perform { try await model.driveFocus(near: false, steps: UInt32(focusSteps)) } }
+                                }.disabled(model.busy)
+                                Text("��Ծ�ͷ����������������ϵȡ���ھ�ͷ�������ڼ����ͣͼ����") .font(.caption).foregroundStyle(.secondary)
+                            }
+                            if device.operations.contains(PTPOperation.terminateCapture) {
+                                Button("��ֹ���� / ���ع�", systemImage: "stop.hand") { model.perform { await model.stopStream(); try await model.camera.terminateCapture() } }.disabled(model.busy)
+                            }
+                        }.zoraPanel()
+                    }
                     if !model.properties.isEmpty {
                         VStack(alignment: .leading, spacing: 14) {
-                            Text("曝光与色彩").font(.headline)
+                            Text("�ع���ɫ��").font(.headline)
                             ForEach(model.properties) { property in PropertyRow(property: property) }
                         }.zoraPanel()
                     }
-                    Button("浏览相机存储卡", systemImage: "sdcard") { showFiles = true }
+                    Button("�������洢��", systemImage: "sdcard") { showFiles = true }
                         .disabled(model.device == nil || model.busy)
                     if let progress = model.connectionProgress { Label(progress, systemImage: "antenna.radiowaves.left.and.right").font(.caption).foregroundStyle(Color.zoraAmber) }
                     if model.connectivity.bluetooth.authenticated {
                         HStack {
-                            Label("蓝牙已认证", systemImage: "checkmark.shield")
+                            Label("��������֤", systemImage: "checkmark.shield")
                             Spacer()
                             if let battery = model.connectivity.bluetooth.battery { Label("\(battery)%", systemImage: "battery.100percent") }
                         }.font(.caption).foregroundStyle(.secondary)
                     }
-                    Text("连接、曝光、对焦与取景的可用性取决于固件和相机能力。蓝牙认证与 Wi-Fi 唤醒已接入真实协议，Z7 II 真机兼容性待验证。")
+                    Text("���ӡ��ع⡢�Խ���ȡ���Ŀ�����ȡ���ڹ̼������������������֤�� Wi-Fi �����ѽ�����ʵЭ�飬Z7 II ��������Դ���֤��")
                         .font(.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
                 }.padding(20)
             }.background(Color.zoraBackground).toolbar(.hidden, for: .navigationBar)
@@ -122,7 +152,7 @@ struct HistogramView: View {
         }
         path.addLine(to: CGPoint(x: size.width, y: size.height)); path.closeSubpath()
         context.fill(path, with: .color(.zoraAmber.opacity(0.8)))
-    }.accessibilityLabel("图像亮度直方图") }
+    }.accessibilityLabel("ͼ������ֱ��ͼ") }
 }
 
 private struct PropertyRow: View {
@@ -139,8 +169,8 @@ private struct PropertyRow: View {
                 }
             } else {
                 TextField("\(property.current)", text: $text).multilineTextAlignment(.trailing).frame(width: 90).keyboardType(.numbersAndPunctuation)
-                Button("设置") {
-                    guard let value = Int64(text) else { model.error = "请输入整数参数"; return }
+                Button("����") {
+                    guard let value = Int64(text) else { model.error = "��������������"; return }
                     model.perform { try await model.set(property, value: value) }
                 }.disabled(!property.writable || model.busy)
             }
@@ -154,62 +184,84 @@ struct ConnectionView: View {
     @AppStorage("cameraHost") private var host = "192.168.1.1"
     @State private var ssid = ""
     @State private var password = ""
+    @State private var connectionMode = 0
     var body: some View {
         @Bindable var bluetooth = model.connectivity.bluetooth
         @Bindable var settings = model
         NavigationStack {
             Form {
-                Section("1 · 蓝牙配对与唤醒") {
-                    Text("首次连接：在 Z7 II 中开启“连接至智能设备 → 配对（蓝牙）”，再扫描并选择相机。按系统和相机提示确认配对码。")
+                Section {
+                    Picker("���ӷ�ʽ", selection: $connectionMode) { Text("����").tag(0); Text("USB ����").tag(1) }.pickerStyle(.segmented).accessibilityIdentifier("connectionMode")
+                }
+                if connectionMode == 1 {
+                    Section("USB ����������") {
+                        Text("ʹ��֧�����ݴ���� USB-C ������ iPhone/iPad �� Z7 II�����������Lightning �豸����� USB ת���������粻��ʱʹ�ô�����ת������")
+                        Button("���� USB ���", systemImage: "cable.connector") { Task { await model.usb.search() } }.accessibilityIdentifier("searchUSBCamera")
+                        Text(model.usb.status).font(.caption).accessibilityIdentifier("usbConnectionStatus")
+                        ForEach(model.usb.cameras) { camera in
+                            Button(camera.name) { model.perform { try await model.connectUSB(camera.id); dismiss() } }.disabled(model.busy)
+                        }
+                        if model.connectionType == "USB" { Button("�Ͽ� USB �Ự") { model.perform { try await model.disconnect() } }.disabled(model.busy) }
+                        Text("�״����������ý�������Ȩ�ޡ�USB ���Ӳ���Ҫ��� Wi-Fi�����ӳɹ��������㡢ȡ�����ļ����ɫ���ܡ���ʵ�������谴����͹̼����ա�") .font(.caption).foregroundStyle(.secondary)
+                    }
+                } else {
+                Section("1 �� ��������뻽��") {
+                    Text("�״����ӣ��� Z7 II �п����������������豸 �� ��ԣ�������������ɨ�貢ѡ���������ϵͳ�������ʾȷ������롣")
                     Label(bluetooth.status, systemImage: bluetooth.authenticated ? "checkmark.shield" : "antenna.radiowaves.left.and.right").font(.caption)
-                    Button("搜索 Nikon 相机", systemImage: "dot.radiowaves.left.and.right") { bluetooth.scan() }.disabled(bluetooth.working || bluetooth.authenticated)
+                    Button("���� Nikon ���", systemImage: "dot.radiowaves.left.and.right") { bluetooth.scan() }.disabled(bluetooth.working || bluetooth.authenticated)
                     ForEach(bluetooth.nearby.sorted(by: { $0.rssi > $1.rssi })) { item in
                         Button { bluetooth.connect(item.id) } label: {
                             HStack { Text(item.name); Spacer(); Text("\(item.rssi) dBm").font(.caption).foregroundStyle(.secondary) }
                         }.disabled(bluetooth.working || bluetooth.authenticated)
                     }
                     if bluetooth.identity != nil {
-                        Button("重连已保存相机") { bluetooth.retrySaved() }.disabled(bluetooth.working || bluetooth.authenticated)
-                        Toggle("自动重连已配对相机", isOn: $bluetooth.autoReconnect)
-                        Toggle("前台连接后自动唤醒并连接 Wi-Fi", isOn: $settings.autoWake)
-                        Button("唤醒并连接相机", systemImage: "bolt.horizontal.circle") { model.perform { try await model.wakeAndConnect(); dismiss() } }
+                        Button("�����ѱ������") { bluetooth.retrySaved() }.disabled(bluetooth.working || bluetooth.authenticated)
+                        Toggle("�Զ�������������", isOn: $bluetooth.autoReconnect)
+                        Toggle("ǰ̨���Ӻ��Զ����Ѳ����� Wi-Fi", isOn: $settings.autoWake)
+                        Button("���Ѳ��������", systemImage: "bolt.horizontal.circle") { model.perform { try await model.wakeAndConnect(); dismiss() } }
                             .disabled(!bluetooth.authenticated || model.busy)
-                        Button("同步相机时间与电量") { Task { await bluetooth.refreshTelemetry() } }.disabled(!bluetooth.authenticated)
-                        if let battery = bluetooth.battery { Label("相机电量 \(battery)%", systemImage: "battery.100percent") }
-                        Button("断开蓝牙") { bluetooth.disconnect() }
-                        Button("忘记本机相机资料", role: .destructive) { bluetooth.disconnect(forget: true) }
+                        Button("ͬ�����ʱ�������") { Task { await bluetooth.refreshTelemetry() } }.disabled(!bluetooth.authenticated)
+                        if let battery = bluetooth.battery { Label("������� \(battery)%", systemImage: "battery.100percent") }
+                        Button("�Ͽ�����") { bluetooth.disconnect() }
+                        Button("���Ǳ����������", role: .destructive) { bluetooth.disconnect(forget: true) }
                     }
-                    DisclosureGroup("首次系统绑定与兼容性说明") {
-                        Text("Nikon 认证完成不等于系统绑定完成。如相机仍要求配对，可打开系统配件选择器，或到 iPhone 蓝牙设置中确认相机，再返回重连。部分 iOS/相机组合可能不显示系统选择器。")
-                        Button("打开系统配件选择器") { bluetooth.showSystemPairing() }
-                        Text("自动唤醒需要相机蓝牙保持开启；关机连接还受相机“关机时发送”设置影响。飞行模式、取出电池、强制退出 App 或系统后台限制时无法保证唤醒。后台恢复只重连保存的相机，Wi-Fi 切换在前台完成。")
+                    DisclosureGroup("�״�ϵͳ���������˵��") {
+                        Text("Nikon ��֤��ɲ�����ϵͳ����ɡ��������Ҫ����ԣ��ɴ�ϵͳ���ѡ�������� iPhone ����������ȷ��������ٷ������������� iOS/�����Ͽ��ܲ���ʾϵͳѡ������")
+                        Button("��ϵͳ���ѡ����") { bluetooth.showSystemPairing() }
+                        Text("�Զ�������Ҫ����������ֿ������ػ����ӻ���������ػ�ʱ���͡�����Ӱ�졣����ģʽ��ȡ����ء�ǿ���˳� App ��ϵͳ��̨����ʱ�޷���֤���ѡ���̨�ָ�ֻ��������������Wi-Fi �л���ǰ̨��ɡ�")
                     }.font(.caption)
                 }
-                Section("2 · 保存相机 Wi-Fi") {
-                    Text("在相机菜单中开启连接至智能设备/Wi-Fi。可先在 iPhone 设置中加入相机热点，也可在下方输入相机显示的 SSID。")
-                    TextField("相机 SSID", text: $ssid).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    SecureField("Wi-Fi 密码", text: $password)
-                    Button("保存至此相机的钥匙串") { model.perform { try model.saveCameraWiFi(ssid: ssid, password: password, host: host); password = "" } }
+                Section("2 �� ������� Wi-Fi") {
+                    Text("������˵��п��������������豸/Wi-Fi�������� iPhone �����м�������ȵ㣬Ҳ�����·����������ʾ�� SSID��")
+                    TextField("��� SSID", text: $ssid).textInputAutocapitalization(.never).autocorrectionDisabled()
+                    SecureField("Wi-Fi ����", text: $password)
+                    Button("�������������Կ�״�") { model.perform { try model.saveCameraWiFi(ssid: ssid, password: password, host: host); password = "" } }
                         .disabled(model.busy || !bluetooth.authenticated || ssid.isEmpty)
-                    Text("首次保存一次热点信息，后续可由蓝牙唤醒衔接连接。iOS 可能仍要求确认加入网络。密码不会进入诊断日志。") .font(.caption).foregroundStyle(.secondary)
-                    Button("加入此 Wi-Fi") { model.perform { try await model.connectivity.join(ssid: ssid, password: password); password = "" } }.disabled(model.busy || ssid.isEmpty)
+                    Text("�״α���һ���ȵ���Ϣ�������������������ν����ӡ�iOS ������Ҫ��ȷ�ϼ������硣���벻����������־��") .font(.caption).foregroundStyle(.secondary)
+                    Button("����� Wi-Fi") { model.perform { try await model.connectivity.join(ssid: ssid, password: password); password = "" } }.disabled(model.busy || ssid.isEmpty)
                 }
-                Section("3 · 手动 PTP/IP 连接 / 网络地址") {
-                    TextField("相机 IP / 主机名", text: $host).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
-                    Text("默认地址只是可编辑的起点。请按相机当前网络实际地址填写；15740 端口或配对要求可能因固件而异。")
+                Section("3 �� �ֶ� PTP/IP ���� / �����ַ") {
+                    TextField("��� IP / ������", text: $host).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
+                    Text("Ĭ�ϵ�ַֻ�ǿɱ༭����㡣�밴�����ǰ����ʵ�ʵ�ַ��д��15740 �˿ڻ����Ҫ�������̼����졣")
                         .font(.caption).foregroundStyle(.secondary)
-                    Button("建立真实连接") { model.perform { try await model.connect(host: host); dismiss() } }.disabled(model.busy)
-                    if model.device != nil { Button("断开连接", role: .destructive) { model.perform { try await model.disconnect() } } }
+                    Button("������ʵ����") { model.perform { try await model.connect(host: host); dismiss() } }.disabled(model.busy)
+                    if model.device != nil { Button("�Ͽ�����", role: .destructive) { model.perform { try await model.disconnect() } } }
+                }
                 }
                 if let progress = model.connectionProgress { Section { ProgressView(progress) } }
-                Section("连接诊断") {
-                    Text("阶段：\(bluetooth.state.rawValue) · PTP：\(model.device == nil ? "未建立" : "已验证")").font(.caption)
-                    ShareLink(item: bluetooth.diagnostics.joined(separator: "\n")) { Label("分享不含密码的蓝牙诊断", systemImage: "square.and.arrow.up") }
-                    DisclosureGroup("最近事件") {
+                Section("�������") {
+                    Text("�׶Σ�\(bluetooth.state.rawValue) �� PTP��\(model.device == nil ? "δ����" : "����֤")").font(.caption)
+                    ShareLink(item: bluetooth.diagnostics.joined(separator: "\n")) { Label("��������������������", systemImage: "square.and.arrow.up") }
+                    DisclosureGroup("����¼�") {
                         ForEach(Array(bluetooth.diagnostics.suffix(12).enumerated()), id: \.offset) { _, line in Text(line).font(.caption2).textSelection(.enabled) }
                     }
+                    DisclosureGroup("����¼�") {
+                        ForEach(Array(model.protocolEvents.suffix(12).enumerated()), id: \.offset) { _, event in
+                            Text(String(format: "0x%04X", event.code) + " �� " + event.parameters.map(String.init).joined(separator: ", ")).font(.caption2)
+                        }
+                    }
                 }
-            }.navigationTitle("相机连接").toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
+            }.navigationTitle("�������").toolbar { ToolbarItem(placement: .confirmationAction) { Button("���") { dismiss() } } }
         }
     }
 }
@@ -218,15 +270,33 @@ private struct CameraFilesView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     var body: some View {
+        @Bindable var settings = model
         NavigationStack {
             List {
-                Text("每个存储区显示最多 200 项。相机下载限 64 MiB；较大 RAW 可从“照片 → 导入”加入。") .font(.caption).foregroundStyle(.secondary)
-                Button("刷新相机文件") { model.perform { try await model.listCameraFiles() } }.disabled(model.busy)
+                Text("���洢����ҳ��ȡ��֧�ַֿ��ȡ����������س��� 64 MiB �� RAW�����ڵ��� 4 GiB ����չ���������� Files ���롣") .font(.caption).foregroundStyle(.secondary)
+                Button("ˢ������ļ�") { model.perform { try await model.listCameraFiles() } }.disabled(model.busy)
+                if model.cameraFilesChanged { Label("���Ŀ¼�б仯����ˢ�º�������", systemImage: "arrow.clockwise").font(.caption).foregroundStyle(Color.zoraAmber) }
+                if !model.cardStorageIDs.isEmpty {
+                    Picker("�洢��", selection: $settings.selectedStorage) {
+                        ForEach(model.cardStorageIDs, id: \.self) { id in Text(model.storages.first(where: { $0.id == id })?.description ?? String(format: "�洢�� %08X", id)).tag(Optional(id)) }
+                    }.onChange(of: model.selectedStorage) { _, _ in model.perform { try await model.loadCameraPage(reset: true) } }.disabled(model.busy)
+                }
+                ForEach(model.storages) { storage in
+                    VStack(alignment: .leading) {
+                        Text(storage.description.isEmpty ? storage.label : storage.description)
+                        Text("���� \(ByteCountFormatter.string(fromByteCount: Int64(clamping: storage.freeBytes), countStyle: .file)) / \(ByteCountFormatter.string(fromByteCount: Int64(clamping: storage.capacity), countStyle: .file))") .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                if let data = model.cameraThumbnail, let image = UIImage(data: data) { Image(uiImage: image).resizable().scaledToFit().frame(maxHeight: 240) }
                 ForEach(model.cameraObjects) { object in
                     HStack { VStack(alignment: .leading) { Text(object.filename); Text(ByteCountFormatter.string(fromByteCount: Int64(object.size), countStyle: .file)).font(.caption).foregroundStyle(.secondary) }
-                        Spacer(); Button("下载") { model.perform { try await model.download(object) } }.disabled(model.busy) }
+                        Spacer()
+                        if model.device?.operations.contains(PTPOperation.thumbnail) == true { Button("Ԥ��") { model.perform { try await model.loadThumbnail(object) } }.disabled(model.busy) }
+                        Button("����") { model.perform { try await model.download(object) } }.disabled(model.busy || object.format == 0x3001) }
                 }
-            }.navigationTitle("相机文件").toolbar { Button("完成") { dismiss() } }
+                Text("����ʾ \(model.cameraObjects.count) / \(model.objectTotal) ��").font(.caption).foregroundStyle(.secondary)
+                if model.nextObjectOffset != nil { Button("������һҳ") { model.perform { try await model.loadCameraPage(reset: false) } }.disabled(model.busy) }
+            }.navigationTitle("����ļ�").toolbar { Button("���") { dismiss() } }
         }
     }
 }
