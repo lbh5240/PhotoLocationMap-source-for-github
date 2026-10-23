@@ -1,3 +1,5 @@
+0.3 更新：CameraSession 新增 PTPDirectTransport（USB 系统会话）分支，与 PTP/IP 双通道共用业务操作；USBCamera 主线程使用 ImageCaptureCore，PTPUSBContainer 负责线格式，生命周期不伪造响应。详见 USB_AND_PUBLIC_PROTOCOLS.md。
+
 # 架构与数据流程
 
 ## 分层

@@ -1,0 +1,20 @@
+Commit: 875d3de453faaf383908af4f6f87883fc589ad7b
+Run: https://github.com/lbh5240/PhotoLocationMap-source-for-github/actions/runs/39960752781
+Platform: iOS 27 simulator. Not Nikon USB hardware verification.
+
+Test Suite 'All tests' started at 2026-10-23 13:28:47.216.
+Test Suite 'ZORACameraUITests.xctest' started at 2026-10-23 13:28:47.219.
+Test Suite 'ZORACameraUITests' started at 2026-10-23 13:28:47.219.
+Test Case '-[ZORACameraUITests.ZORACameraUITests testDisconnectedCameraDoesNotPresentFakeLiveView]' started.
+Test Case '-[ZORACameraUITests.ZORACameraUITests testDisconnectedCameraDoesNotPresentFakeLiveView]' passed (16.475 seconds).
+Test Case '-[ZORACameraUITests.ZORACameraUITests testLibraryAndLooksNavigation]' started.
+Test Case '-[ZORACameraUITests.ZORACameraUITests testLibraryAndLooksNavigation]' passed (16.718 seconds).
+Test Case '-[ZORACameraUITests.ZORACameraUITests testUSBSimulatorNeverPretendsACameraIsConnected]' started.
+Test Case '-[ZORACameraUITests.ZORACameraUITests testUSBSimulatorNeverPretendsACameraIsConnected]' passed (15.188 seconds).
+Test Suite 'ZORACameraUITests' passed at 2026-10-23 13:29:35.604.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 48.381 (48.385) seconds
+Test Suite 'ZORACameraUITests.xctest' passed at 2026-10-23 13:29:35.605.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 48.381 (48.386) seconds
+Test Suite 'All tests' passed at 2026-10-23 13:29:35.605.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 48.381 (48.389) seconds
+** TEST SUCCEEDED **

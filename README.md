@@ -1,6 +1,6 @@
 # ZORA Camera
 
-当前源码版本 **0.2.0**：新增真实 Nikon BLE 四阶段认证、Wi-Fi 唤醒、保存相机、自动重连、前台自动连接、电量/校时和连接诊断。详见 [本次蓝牙开发报告](Docs/BLUETOOTH_AND_WAKE.md) 与 [0.2.0 IPA 记录](Docs/IPA_DELIVERY.md)。Z7 II 真机互操作与系统绑定尚待验收。
+当前源码版本 **0.3.0**：新增原生 USB 连接、录像启停、手动调焦、接管/释放、多卡容量与分页、真实缩略图、大 RAW 分块下载和事件处理；保留 0.2 蓝牙认证/唤醒。详见 [USB 与公开协议报告](Docs/USB_AND_PUBLIC_PROTOCOLS.md)、[蓝牙报告](Docs/BLUETOOTH_AND_WAKE.md) 和 [IPA 记录](Docs/IPA_DELIVERY.md)。Z7 II 真机互操作尚待验收。
 
 面向 Nikon Z7 II 的原生 iOS 27 摄影 App 开发工程。Swift 6、SwiftUI、Liquid Glass；独立核心包不依赖 Apple UI 框架。
 
@@ -15,6 +15,7 @@
 3. 真机运行时，在 Signing & Capabilities 选择自己的 Apple Developer Team，并使用自己的 Bundle ID。工程包含 Hotspot Configuration entitlement。
 4. 运行后可以直接导入照片、编辑与导出、导入 `.cube` 或 Recipe JSON、配置 NAS 和查看上传队列。相机不是这些流程的前置条件。
 5. 真实相机连接：在“拍摄 → 连接相机”搜索 Nikon → 确认配对提示并完成认证 → 首次保存相机热点信息 → 点击“唤醒并连接相机”。也保留手动加入 Wi-Fi / 填写相机 IP 的路径。详见蓝牙报告中的真机步骤。
+6. USB：在“连接相机”选择“USB 有线”，接入数据线、开启相机、搜索并允许系统媒体/控制权限，再选择相机。取景被拒时可按机身状态主动接管控制；完成后释放控制。
 
 连接失败时不要将问题解释为权限已经满足或协议已兼容：系统本地网络权限、网络模式、IP、端口、Nikon 私有配对均可能影响结果。不要同时让 SnapBridge 占用相机会话。
 
@@ -37,7 +38,8 @@ xcodebuild -project ZORACamera.xcodeproj -scheme ZORACamera \
 
 ## 可使用的功能路径
 
-- 拍摄：真实 TCP 双通道、PTP/IP 初始化、设备信息/操作集、Session、标准快门、Nikon AF/Live View 操作、标量属性枚举与设置、存储卡前 200 项/存储区、下载。
+- 拍摄：USB 系统会话 / TCP 双通道，真实 PTP、能力门禁、标准/落卡快门、AF/Live View、录像启停、近远手动调焦、远程控制接管/释放、终止连拍/长曝、标量属性枚举与设置。
+- 相机文件：多卡容量、分页浏览、真实缩略图、标准 101B 分块下载普通大 NEF、临时文件完整提交、事件目录变化提示。
 - 连接：原生 Nikon BLE 四阶段认证、身份/热点钥匙串保存、Wi-Fi 唤醒、最多五次退避重连、系统蓝牙恢复、前台自动进入 PTP、校时与电量、分阶段连接诊断。
 - 监看：实际 JPEG 解码、九宫格、预览直方图、RGB 高亮斑马纹、亮度梯度峰值辅助。不是 RAW 传感器测量；没有音频、波形、矢量示波器或伪造曝光参数。
 - 照片：Files 多选导入、NEF/NRW/DNG 原片保留、持久索引、非破坏编辑、sRGB JPEG 导出、系统分享。RAW 解码失败仍保留原片，并显示具体不可用状态。
@@ -51,9 +53,9 @@ WebDAV 需先创建设置中的远端目录。S3 需先创建 bucket。App 给�
 - 已完成云端 Xcode/iOS 真机归档与未签名 IPA 打包；尚无签名安装、真实设备 UI 截图或 App Store 验收结果。
 - BLE GATT 认证、唤醒及自动 Wi-Fi 衔接已实现；公开跨机型向量测试通过，Z7 II 首配/系统绑定/唤醒仍待硬件验收。iOS 加入网络可能需要用户确认，后台与强制退出时不保证唤醒。
 - 未确认 Z7 II 在智能设备模式接受通用 PTP/IP；拒绝握手会报错，不会降级为模拟成功。需要实际固件、网络模式和授权协议样本。
-- 相机单文件下载 64 MiB 上限；更大 NEF 可通过 Files 导入。S3 上传单文件 256 MiB 上限，尚无 multipart/resume。
+- 声明 101B 的相机采用最大4MiB分块，支持超过64MiB的普通RAW；64位大小/偏移的扩展对象未实现。无分块能力时仍限制64MiB。S3 上传单文件256MiB上限，尚无 multipart/resume。
 - 队列在 App 前台/仍获执行时间时工作；未接入后台 URLSession、BGTaskScheduler，不承诺后台持续上传。退到后台会停止实时取景。
-- 没有视频录制控制、触摸对焦区域、焦点堆栈、延时/包围拍摄、Bulb、机内删除/格式化、Picture Control 写入、地理标签回写、Nikon ID/云创登录。
+- 触摸对焦区域/主体追踪的帧头坐标、焦点堆栈、延时/包围拍摄、自动Bulb模式、机内删除/格式化、Picture Control写入、地理标签回写、Nikon ID/云创登录仍未实现。录像/调焦等已接通功能继续受机身能力和当前模式限制。
 - LUT 当前仅存内存，重启后需重新导入。Recipes 和每张照片导出时采用的编辑参数会持久保存。
 - 专业监看是可用的基础辅助；无帧率、延迟、耗电、热管理真机性能保证。
 

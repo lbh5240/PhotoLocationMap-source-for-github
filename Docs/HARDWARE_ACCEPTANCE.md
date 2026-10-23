@@ -5,7 +5,7 @@
 ## Xcode 与界面
 
 - [x] 用云端 Xcode 27 / iOS 27 SDK 完成 Debug 模拟器编译与 Release ARM64 真机归档；解决本次 SwiftUI/CoreImage 编译诊断。
-- [x] 核心测试与基础 UI Tests（39 核心项：38 通过/1 跳过；2 UI 项通过）。执行编号与日志见 TEST_SUMMARY.md。
+- [x] 核心测试（53 项：52 通过/1 跳过）与基础 UI 3 项通过；执行编号见 TEST_SUMMARY.md。
 - [ ] Instruments 性能分析；真机 Xcode build、iOS build、机型和性能报告。
 - [ ] iPhone/iPad 竖横屏、最大动态字体、VoiceOver、Reduce Motion/Transparency、深浅环境对比、键盘避让。
 - [ ] 真机签名与 Hotspot Configuration entitlement；本地网络/蓝牙权限允许、拒绝、撤回路径。
@@ -20,7 +20,9 @@
 - [ ] 按 CAMERA_FEASIBILITY 顺序验证；记录固件与网络模式，先只读，再属性，再快门，再 Live View。
 - [ ] 协议失败明确报错；禁止假图、禁止乐观“拍摄成功”。确认照片确实落盘后才统计拍摄成功。
 - [ ] 10 分钟图传、热点切换、断网、相机休眠/断电、再连接、退后台与回前台、SnapBridge 争用。
-- [ ] 多卡/200项截断提示/64MiB边界/下载字节比对、Unicode 文件名。
+- [ ] 多卡容量、200项后的分页、真实缩略图、4MiB分块/65MiB以上NEF、下载字节与SHA256比对、Unicode文件名。
+- [ ] USB-C/Lightning转接器、供电、媒体/控制权限、真实会话、拔线/超时/重插、USB与Wi-Fi切换。
+- [ ] 视频模式下录像启停与落盘、近远手动调焦/行程边界、接管/释放、终止连拍/长曝；被接受的响应不等于实际完成。
 - [ ] 对未支持操作展示实际 unavailable，不将私有配对、视频和机内写入标成完成。
 
 ## NAS
