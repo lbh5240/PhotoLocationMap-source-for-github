@@ -77,7 +77,15 @@ struct CameraView: View {
                     }
                     Button("浏览相机存储卡", systemImage: "sdcard") { showFiles = true }
                         .disabled(model.device == nil || model.busy)
-                    Text("连接、曝光、对焦与取景的可用性取决于固件、网络模式及相机声明的操作。蓝牙目前仅支持设备发现。")
+                    if let progress = model.connectionProgress { Label(progress, systemImage: "antenna.radiowaves.left.and.right").font(.caption).foregroundStyle(Color.zoraAmber) }
+                    if model.connectivity.bluetooth.authenticated {
+                        HStack {
+                            Label("蓝牙已认证", systemImage: "checkmark.shield")
+                            Spacer()
+                            if let battery = model.connectivity.bluetooth.battery { Label("\(battery)%", systemImage: "battery.100percent") }
+                        }.font(.caption).foregroundStyle(.secondary)
+                    }
+                    Text("连接、曝光、对焦与取景的可用性取决于固件和相机能力。蓝牙认证与 Wi-Fi 唤醒已接入真实协议，Z7 II 真机兼容性待验证。")
                         .font(.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
                 }.padding(20)
             }.background(Color.zoraBackground).toolbar(.hidden, for: .navigationBar)
@@ -147,26 +155,59 @@ struct ConnectionView: View {
     @State private var ssid = ""
     @State private var password = ""
     var body: some View {
+        @Bindable var bluetooth = model.connectivity.bluetooth
+        @Bindable var settings = model
         NavigationStack {
             Form {
-                Section("1 · 连接相机 Wi-Fi") {
+                Section("1 · 蓝牙配对与唤醒") {
+                    Text("首次连接：在 Z7 II 中开启“连接至智能设备 → 配对（蓝牙）”，再扫描并选择相机。按系统和相机提示确认配对码。")
+                    Label(bluetooth.status, systemImage: bluetooth.authenticated ? "checkmark.shield" : "antenna.radiowaves.left.and.right").font(.caption)
+                    Button("搜索 Nikon 相机", systemImage: "dot.radiowaves.left.and.right") { bluetooth.scan() }.disabled(bluetooth.working)
+                    ForEach(bluetooth.nearby.sorted(by: { $0.rssi > $1.rssi })) { item in
+                        Button { bluetooth.connect(item.id) } label: {
+                            HStack { Text(item.name); Spacer(); Text("\(item.rssi) dBm").font(.caption).foregroundStyle(.secondary) }
+                        }.disabled(bluetooth.working)
+                    }
+                    if bluetooth.identity != nil {
+                        Button("重连已保存相机") { bluetooth.retrySaved() }.disabled(bluetooth.working || bluetooth.authenticated)
+                        Toggle("自动重连已配对相机", isOn: $bluetooth.autoReconnect)
+                        Toggle("前台连接后自动唤醒并连接 Wi-Fi", isOn: $settings.autoWake)
+                        Button("唤醒并连接相机", systemImage: "bolt.horizontal.circle") { model.perform { try await model.wakeAndConnect(); dismiss() } }
+                            .disabled(!bluetooth.authenticated || model.busy)
+                        Button("同步相机时间与电量") { Task { await bluetooth.refreshTelemetry() } }.disabled(!bluetooth.authenticated)
+                        if let battery = bluetooth.battery { Label("相机电量 \(battery)%", systemImage: "battery.100percent") }
+                        Button("断开蓝牙") { bluetooth.disconnect() }
+                        Button("忘记本机相机资料", role: .destructive) { bluetooth.disconnect(forget: true) }
+                    }
+                    DisclosureGroup("首次系统绑定与兼容性说明") {
+                        Text("Nikon 认证完成不等于系统绑定完成。如相机仍要求配对，可打开系统配件选择器，或到 iPhone 蓝牙设置中确认相机，再返回重连。部分 iOS/相机组合可能不显示系统选择器。")
+                        Button("打开系统配件选择器") { bluetooth.showSystemPairing() }
+                        Text("自动唤醒需要相机蓝牙保持开启；关机连接还受相机“关机时发送”设置影响。飞行模式、取出电池、强制退出 App 或系统后台限制时无法保证唤醒。后台恢复只重连保存的相机，Wi-Fi 切换在前台完成。")
+                    }.font(.caption)
+                }
+                Section("2 · 保存相机 Wi-Fi") {
                     Text("在相机菜单中开启连接至智能设备/Wi-Fi。可先在 iPhone 设置中加入相机热点，也可在下方输入相机显示的 SSID。")
                     TextField("相机 SSID", text: $ssid).textInputAutocapitalization(.never).autocorrectionDisabled()
                     SecureField("Wi-Fi 密码", text: $password)
+                    Button("保存至此相机的钥匙串") { model.perform { try model.saveCameraWiFi(ssid: ssid, password: password, host: host); password = "" } }
+                        .disabled(model.busy || !bluetooth.authenticated || ssid.isEmpty)
+                    Text("首次保存一次热点信息，后续可由蓝牙唤醒衔接连接。iOS 可能仍要求确认加入网络。密码不会进入诊断日志。") .font(.caption).foregroundStyle(.secondary)
                     Button("加入此 Wi-Fi") { model.perform { try await model.connectivity.join(ssid: ssid, password: password); password = "" } }.disabled(model.busy || ssid.isEmpty)
                 }
-                Section("2 · 实验性 PTP/IP 会话") {
+                Section("3 · 手动 PTP/IP 连接 / 网络地址") {
                     TextField("相机 IP / 主机名", text: $host).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
                     Text("默认地址只是可编辑的起点。请按相机当前网络实际地址填写；15740 端口或配对要求可能因固件而异。")
                         .font(.caption).foregroundStyle(.secondary)
                     Button("建立真实连接") { model.perform { try await model.connect(host: host); dismiss() } }.disabled(model.busy)
                     if model.device != nil { Button("断开连接", role: .destructive) { model.perform { try await model.disconnect() } } }
                 }
-                Section("蓝牙设备发现") {
-                    Button("扫描附近设备") { model.connectivity.scan() }
-                    Text(model.connectivity.bluetoothStatus).font(.caption)
-                    ForEach(model.connectivity.peripherals.keys.sorted(by: { $0.uuidString < $1.uuidString }), id: \.self) { id in Text(model.connectivity.peripherals[id] ?? "未知设备") }
-                    Text("扫描结果不代表已配对。Nikon 私有 GATT 认证与蓝牙唤醒尚未实现。") .font(.caption).foregroundStyle(.secondary)
+                if let progress = model.connectionProgress { Section { ProgressView(progress) } }
+                Section("连接诊断") {
+                    Text("阶段：\(bluetooth.state.rawValue) · PTP：\(model.device == nil ? "未建立" : "已验证")").font(.caption)
+                    ShareLink(item: bluetooth.diagnostics.joined(separator: "\n")) { Label("分享不含密码的蓝牙诊断", systemImage: "square.and.arrow.up") }
+                    DisclosureGroup("最近事件") {
+                        ForEach(Array(bluetooth.diagnostics.suffix(12).enumerated()), id: \.offset) { _, line in Text(line).font(.caption2).textSelection(.enabled) }
+                    }
                 }
             }.navigationTitle("相机连接").toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
         }

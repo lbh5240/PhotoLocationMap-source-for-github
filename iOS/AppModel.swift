@@ -1,6 +1,14 @@
 import Foundation
 import Observation
+import NetworkExtension
 import ZoraCore
+
+struct CameraWiFiProfile: Codable {
+    let peripheralID: UUID
+    let ssid: String
+    let password: String
+    let host: String
+}
 
 @MainActor @Observable final class AppModel {
     var error: String?
@@ -17,6 +25,10 @@ import ZoraCore
     var cube: CubeLUT?
     var cubeName: String?
     var destination: NASDestination?
+    var connectionProgress: String?
+    var autoWake = UserDefaults.standard.object(forKey: "bleAutoWake") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(autoWake, forKey: "bleAutoWake") }
+    }
     let connectivity = Connectivity()
     let camera: CameraSession
     let library: AssetLibrary
@@ -25,6 +37,7 @@ import ZoraCore
     private let root: URL
     private var liveTask: Task<Void, Never>?
     private var worker: Task<Void, Never>?
+    private var foreground = true
     init() throws {
         root = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true).appendingPathComponent("ZORA", isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -41,6 +54,8 @@ import ZoraCore
     }
     func start() async {
         await refresh()
+        connectivity.bluetooth.onAuthenticated = { [weak self] in self?.autoWakeIfReady() }
+        connectivity.bluetooth.resume(foreground: foreground)
         worker?.cancel()
         worker = Task { [weak self] in
             while !Task.isCancelled {
@@ -48,6 +63,55 @@ import ZoraCore
                 try? await Task.sleep(for: .seconds(15))
             }
         }
+    }
+    func sceneActive(_ active: Bool) {
+        foreground = active; connectivity.bluetooth.resume(foreground: active)
+        if active { autoWakeIfReady() }
+    }
+    private func autoWakeIfReady() {
+        guard autoWake, foreground, !busy, device == nil, connectivity.bluetooth.authenticated,
+              let profile = try? Keychain.loadValue(CameraWiFiProfile.self, id: "nikon.wifi"),
+              profile.peripheralID == connectivity.bluetooth.identity?.peripheralID else { return }
+        perform { try await self.wakeAndConnect() }
+    }
+    func saveCameraWiFi(ssid: String, password: String, host: String) throws {
+        guard let id = connectivity.bluetooth.identity?.peripheralID else { throw ZoraError.unsupported("请先完成蓝牙认证，再绑定此相机的 Wi-Fi") }
+        guard !ssid.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !host.isEmpty,
+              password.isEmpty || (8...63).contains(password.utf8.count) else { throw ZoraError.malformed("请输入有效 SSID、地址及 8–63 字节的 Wi-Fi 密码") }
+        try Keychain.saveValue(CameraWiFiProfile(peripheralID: id, ssid: ssid, password: password, host: host), id: "nikon.wifi")
+        notice = "相机 Wi-Fi 已保存到本机钥匙串，后续唤醒可自动衔接连接"
+    }
+    func wakeAndConnect() async throws {
+        guard foreground else { throw ZoraError.unsupported("请回到前台完成相机 Wi-Fi 连接") }
+        let profile = try Keychain.loadValue(CameraWiFiProfile.self, id: "nikon.wifi")
+        guard profile.peripheralID == connectivity.bluetooth.identity?.peripheralID else { throw ZoraError.unsupported("Wi-Fi 资料属于另一台相机，请重新保存") }
+        connectionProgress = "1/3 · 发送蓝牙唤醒请求"
+        defer { connectionProgress = nil }
+        try await connectivity.bluetooth.wakeWiFi()
+        connectionProgress = "2/3 · 等待相机热点 · 请允许 iOS 加入网络"
+        var joinError: Error?
+        for delay in [2, 3, 5] {
+            try await Task.sleep(for: .seconds(delay)); try Task.checkCancellation()
+            guard foreground else { throw ZoraError.unsupported("已暂停自动连接，请回到前台重试") }
+            do { try await connectivity.join(ssid: profile.ssid, password: profile.password); joinError = nil; break }
+            catch {
+                joinError = error
+                // Do not repeatedly present a system prompt after explicit denial.
+                let value = error as NSError
+                if value.domain == NEHotspotConfigurationErrorDomain,
+                   value.code == NEHotspotConfigurationError.userDenied.rawValue { throw error }
+            }
+        }
+        if let joinError { throw joinError }
+        connectionProgress = "3/3 · 验证真实 PTP 相机会话"
+        var lastError: Error = ZoraError.disconnected
+        for _ in 0..<4 {
+            try Task.checkCancellation()
+            guard foreground else { throw ZoraError.unsupported("已暂停自动连接，请回到前台重试") }
+            do { try await connect(host: profile.host); return } catch { lastError = error }
+            try await Task.sleep(for: .seconds(2))
+        }
+        throw lastError
     }
     func refresh() async { assets = await library.assets(); jobs = await uploadQueue.snapshot() }
     func perform(_ operation: @escaping @MainActor () async throws -> Void) {

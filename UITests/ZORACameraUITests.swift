@@ -7,7 +7,8 @@ import XCTest
         XCTAssertTrue(app.staticTexts["等待你的 Nikon Z7 II"].exists)
         XCTAssertFalse(app.buttons["释放快门"].isEnabled)
         app.buttons["connectCamera"].tap()
-        XCTAssertTrue(app.buttons["建立真实连接"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["搜索 Nikon 相机"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.staticTexts["Nikon 蓝牙认证完成"].exists)
     }
     func testLibraryAndLooksNavigation() {
         let app = XCUIApplication(); app.launch()

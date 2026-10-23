@@ -1,5 +1,7 @@
 # ZORA Camera
 
+当前源码版本 **0.2.0**：新增真实 Nikon BLE 四阶段认证、Wi-Fi 唤醒、保存相机、自动重连、前台自动连接、电量/校时和连接诊断。详见 [本次蓝牙开发报告](Docs/BLUETOOTH_AND_WAKE.md)。Z7 II 真机互操作与系统绑定尚待验收；旧版 0.1.0 打包证据不能代替新版验证。
+
 面向 Nikon Z7 II 的原生 iOS 27 摄影 App 开发工程。Swift 6、SwiftUI、Liquid Glass；独立核心包不依赖 Apple UI 框架。
 
 **这是可继续开发的实验版本，不是已交付验收的 SnapBridge 替代品。** 相机驱动发送实际 PTP/IP 数据，未连接设备时不生成取景画面，也不会显示虚假连接成功。Z7 II 私有认证、相机网络模式及各项操作仍需真机验证。完整状态见 [开发报告](Docs/DEVELOPMENT_REPORT.md) 与 [通信可行性矩阵](Docs/CAMERA_FEASIBILITY.md)。

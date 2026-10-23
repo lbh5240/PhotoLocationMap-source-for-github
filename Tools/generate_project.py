@@ -19,7 +19,7 @@ for folder in ['iOS', 'UITests']:
         kind = 'sourcecode.swift' if path.suffix == '.swift' else ('text.plist.xml' if path.suffix in ['.plist', '.entitlements', '.xcprivacy'] else 'text')
         fid = obj('file:'+relative, f'isa = PBXFileReference; lastKnownFileType = {q(kind)}; path = {q(relative)}; sourceTree = SOURCE_ROOT;')
         file_ids[relative] = fid; children.append(fid)
-        if path.suffix == '.swift' or path.name == 'PrivacyInfo.xcprivacy':
+        if path.suffix == '.swift' or path.name in ['PrivacyInfo.xcprivacy', 'ThirdPartyNotices.txt']:
             build_ids[relative] = obj('build:'+relative, f'isa = PBXBuildFile; fileRef = {fid};')
     groups.append(obj('group:'+folder, f'isa = PBXGroup; children = {ids(children)}; name = {folder}; sourceTree = "<group>";'))
 product = obj('app-product', 'isa = PBXFileReference; explicitFileType = wrapper.application; path = ZORACamera.app; sourceTree = BUILT_PRODUCTS_DIR;')
@@ -30,7 +30,7 @@ package = obj('package', 'isa = XCLocalSwiftPackageReference; relativePath = .;'
 dep = obj('core-dependency', f'isa = XCSwiftPackageProductDependency; package = {package}; productName = ZoraCore;')
 link = obj('core-link', f'isa = PBXBuildFile; productRef = {dep};')
 source = obj('app-sources', f'isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = {ids([b for p,b in build_ids.items() if p.startswith("iOS/") and p.endswith(".swift")])}; runOnlyForDeploymentPostprocessing = 0;')
-resources = obj('app-resources', f'isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = {ids([build_ids["iOS/PrivacyInfo.xcprivacy"]])}; runOnlyForDeploymentPostprocessing = 0;')
+resources = obj('app-resources', f'isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = {ids([build_ids["iOS/PrivacyInfo.xcprivacy"], build_ids["iOS/ThirdPartyNotices.txt"]])}; runOnlyForDeploymentPostprocessing = 0;')
 frameworks = obj('app-frameworks', f'isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = {ids([link])}; runOnlyForDeploymentPostprocessing = 0;')
 test_sources = obj('test-sources', f'isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = {ids([b for p,b in build_ids.items() if p.startswith("UITests/")])}; runOnlyForDeploymentPostprocessing = 0;')
 test_frameworks = obj('test-frameworks', 'isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0;')
@@ -51,7 +51,7 @@ def configs(label, settings):
 
 common = {'SWIFT_VERSION':'6.0','IPHONEOS_DEPLOYMENT_TARGET':'27.0','SDKROOT':'iphoneos','CLANG_ENABLE_MODULES':'YES','SWIFT_STRICT_CONCURRENCY':'complete','ENABLE_USER_SCRIPT_SANDBOXING':'YES'}
 project_config = configs('project', common)
-app_config = configs('app', {'PRODUCT_BUNDLE_IDENTIFIER':'app.zora.camera','PRODUCT_NAME':'$(TARGET_NAME)', 'INFOPLIST_FILE':'iOS/Info.plist', 'CODE_SIGN_ENTITLEMENTS':'iOS/ZORACamera.entitlements','CODE_SIGN_STYLE':'Automatic','TARGETED_DEVICE_FAMILY':'1,2','GENERATE_INFOPLIST_FILE':'NO','CURRENT_PROJECT_VERSION':'1','MARKETING_VERSION':'0.1.0'})
+app_config = configs('app', {'PRODUCT_BUNDLE_IDENTIFIER':'app.zora.camera','PRODUCT_NAME':'$(TARGET_NAME)', 'INFOPLIST_FILE':'iOS/Info.plist', 'CODE_SIGN_ENTITLEMENTS':'iOS/ZORACamera.entitlements','CODE_SIGN_STYLE':'Automatic','TARGETED_DEVICE_FAMILY':'1,2','GENERATE_INFOPLIST_FILE':'NO','CURRENT_PROJECT_VERSION':'2','MARKETING_VERSION':'0.2.0'})
 test_config = configs('uitest', {'PRODUCT_BUNDLE_IDENTIFIER':'app.zora.camera.uitests','PRODUCT_NAME':'$(TARGET_NAME)','GENERATE_INFOPLIST_FILE':'YES','CODE_SIGN_STYLE':'Automatic','TARGETED_DEVICE_FAMILY':'1,2','TEST_TARGET_NAME':'ZORACamera'})
 objects[app_id] = f'isa = PBXNativeTarget; buildConfigurationList = {app_config}; buildPhases = {ids([source,frameworks,resources])}; buildRules = (); dependencies = (); name = ZORACamera; packageProductDependencies = {ids([dep])}; productName = ZORACamera; productReference = {product}; productType = "com.apple.product-type.application";'
 objects[test_id] = f'isa = PBXNativeTarget; buildConfigurationList = {test_config}; buildPhases = {ids([test_sources,test_frameworks])}; buildRules = (); dependencies = {ids([target_dep])}; name = ZORACameraUITests; productName = ZORACameraUITests; productReference = {test_product}; productType = "com.apple.product-type.bundle.ui-testing";'

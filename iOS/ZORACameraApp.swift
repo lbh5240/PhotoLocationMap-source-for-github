@@ -15,10 +15,11 @@ import SwiftUI
             .tint(Color.zoraAmber)
             .task {
                 guard model == nil else { return }
-                do { let created = try AppModel(); model = created; await created.start() }
+                do { let created = try AppModel(); model = created; created.sceneActive(phase == .active); await created.start() }
                 catch { startupError = error.localizedDescription }
             }
             .onChange(of: phase) { _, next in
+                model?.sceneActive(next == .active)
                 if next == .background { Task { await model?.stopStream() } }
                 if next == .active { Task { await model?.sync() } }
             }
