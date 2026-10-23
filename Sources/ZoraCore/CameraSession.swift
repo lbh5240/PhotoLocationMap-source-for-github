@@ -36,7 +36,7 @@ public actor CameraSession {
         do {
             try await cmd.open(); try await cmd.send(.initialize(guid: guid, name: "ZORA Camera"))
             let ack = try await cmd.read(timeout: true)
-            guard ack.type == 2, ack.payload.count >= 24 else { throw ZoraError.unsupported("PTP/IP ��ʼ�����ܾ���������Ҫ Nikon ��Ի�ͬ����ģʽ") }
+            guard ack.type == 2, ack.payload.count >= 24 else { throw ZoraError.unsupported("PTP/IP 初始化被拒绝；可能需要 Nikon 配对或不同网络模式") }
             var r = BinaryReader(ack.payload); let connection = try r.integer(UInt32.self)
             try await evt.open()
             var p = Data(); p.appendLE(connection)
@@ -55,7 +55,7 @@ public actor CameraSession {
             }
             transaction = 0
             let info = try CameraDeviceInfo(data: await execute(PTPOperation.deviceInfo).data)
-            guard info.vendor == 0xA, info.manufacturer.lowercased().contains("nikon") else { throw ZoraError.unsupported("��ʵ������������ Nikon ���") }
+            guard info.vendor == 0xA, info.manufacturer.lowercased().contains("nikon") else { throw ZoraError.unsupported("此实验驱动仅用于 Nikon 相机") }
             transaction = 0 // OpenSession itself uses transaction ID zero; in-session requests start at one.
             _ = try await execute(PTPOperation.openSession, parameters: [1])
             device = info
@@ -69,7 +69,7 @@ public actor CameraSession {
             try await transport.open() // Real OS-managed USB session; no fabricated PTP ACK.
             transaction = 1
             let info = try CameraDeviceInfo(data: await execute(PTPOperation.deviceInfo).data)
-            guard info.vendor == 0xA, info.manufacturer.lowercased().contains("nikon") else { throw ZoraError.unsupported("�� USB ���������� Nikon ���") }
+            guard info.vendor == 0xA, info.manufacturer.lowercased().contains("nikon") else { throw ZoraError.unsupported("此 USB 驱动仅用于 Nikon 相机") }
             device = info
             let expected = generation, stream = await transport.eventStream()
             eventTask = Task { [weak self] in
@@ -111,7 +111,7 @@ public actor CameraSession {
     private func run(_ code: UInt16, parameters: [UInt32] = [], sending: Data? = nil) async throws -> PTPResult {
         guard !locked else { throw ZoraError.busy }
         guard let device else { throw ZoraError.disconnected }
-        guard device.operations.contains(code) else { throw ZoraError.unsupported(String(format: "���δ�������� %04X", code)) }
+        guard device.operations.contains(code) else { throw ZoraError.unsupported(String(format: "相机未声明操作 %04X", code)) }
         locked = true; defer { locked = false }
         do { return try await execute(code, parameters: parameters, sending: sending) }
         catch {
@@ -151,7 +151,7 @@ public actor CameraSession {
     public func stopMovie() async throws { _ = try await run(PTPOperation.endMovie) }
     public func terminateCapture() async throws { _ = try await run(PTPOperation.terminateCapture, parameters: [0,0]) }
     public func driveFocus(near: Bool, steps: UInt32) async throws -> FocusDriveResult {
-        guard (1...32767).contains(steps) else { throw ZoraError.malformed("�Խ��������� 1�C32767 ֮��") }
+        guard (1...32767).contains(steps) else { throw ZoraError.malformed("对焦步数需在 1–32767 之间") }
         do { _ = try await run(PTPOperation.manualFocus, parameters: [near ? 1 : 2, steps]) }
         catch ZoraError.cameraResponse(0xA00C) { return .endOfTravel }
         catch ZoraError.cameraResponse(0xA00E) { return .stepTooSmall }
@@ -172,7 +172,7 @@ public actor CameraSession {
     }
     public func stopLiveView() async throws { _ = try await run(PTPOperation.endLiveView); live = false }
     public func frame() async throws -> Data {
-        guard live else { throw ZoraError.unsupported("ʵʱȡ��δ��ʼ") }
+        guard live else { throw ZoraError.unsupported("实时取景未开始") }
         return try LiveViewJPEG.extract(await run(PTPOperation.liveViewImage).data)
     }
     public func properties() async throws -> [CameraProperty] {
@@ -202,7 +202,7 @@ public actor CameraSession {
     }
     public func download(_ object: CameraObject, to target: URL) async throws {
         if device?.operations.contains(PTPOperation.partialObject) == true { try await downloadChunks(object, to: target); return }
-        guard object.size <= 64*1024*1024 else { throw ZoraError.unsupported("���δ�����ֿ����أ����� 64 MiB ���ļ����� Files ����") }
+        guard object.size <= 64*1024*1024 else { throw ZoraError.unsupported("相机未声明分块下载，超过 64 MiB 的文件请用 Files 导入") }
         let data = try await run(PTPOperation.getObject, parameters: [object.id]).data
         guard data.count == Int(object.size) else { throw ZoraError.malformed("download size mismatch") }
         try data.write(to: target, options: .atomic)
@@ -215,9 +215,9 @@ public actor CameraSession {
         try CameraStorage(id: id, data: await run(PTPOperation.storageInfo, parameters: [id]).data)
     }
     public func objectPage(storage: UInt32, offset: Int = 0, limit: Int = 100) async throws -> CameraObjectPage {
-        guard offset >= 0, (1...200).contains(limit) else { throw ZoraError.malformed("�ļ���ҳ����") }
+        guard offset >= 0, (1...200).contains(limit) else { throw ZoraError.malformed("文件分页参数") }
         var r = BinaryReader(try await run(PTPOperation.objectHandles, parameters: [storage,0,0]).data)
-        let all = try r.array32(); guard offset <= all.count else { throw ZoraError.malformed("�洢��Ŀ¼�����仯����ˢ��") }
+        let all = try r.array32(); guard offset <= all.count else { throw ZoraError.malformed("存储卡目录发生变化，请刷新") }
         let end = min(offset + limit, all.count)
         var objects: [CameraObject] = []
         for handle in all[offset..<end] {
@@ -230,10 +230,10 @@ public actor CameraSession {
         try LiveViewJPEG.extract(await run(PTPOperation.thumbnail, parameters: [handle]).data)
     }
     private func downloadChunks(_ object: CameraObject, to target: URL) async throws {
-        guard object.size != UInt32.max, object.format != 0x3001 else { throw ZoraError.unsupported("Ŀ¼����Ҫ 64 λ������չ���ļ������ڴ�����") }
-        guard !FileManager.default.fileExists(atPath: target.path) else { throw ZoraError.unsupported("Ŀ���ļ��Ѵ���") }
+        guard object.size != UInt32.max, object.format != 0x3001 else { throw ZoraError.unsupported("目录或需要 64 位对象扩展的文件不能在此下载") }
+        guard !FileManager.default.fileExists(atPath: target.path) else { throw ZoraError.unsupported("目标文件已存在") }
         let staging = target.deletingLastPathComponent().appendingPathComponent(".\(UUID()).partial")
-        guard FileManager.default.createFile(atPath: staging.path, contents: nil) else { throw ZoraError.unsupported("�޷�����������ʱ�ļ�") }
+        guard FileManager.default.createFile(atPath: staging.path, contents: nil) else { throw ZoraError.unsupported("无法创建下载临时文件") }
         defer { try? FileManager.default.removeItem(at: staging) }
         let file = try FileHandle(forWritingTo: staging); defer { try? file.close() }
         let expected = generation
@@ -243,7 +243,7 @@ public actor CameraSession {
             let count = min(UInt32(4*1024*1024), object.size-offset)
             let result = try await run(PTPOperation.partialObject, parameters: [object.id, offset, count])
             guard !result.data.isEmpty, result.data.count <= Int(count),
-                  result.parameters.first == UInt32(result.data.count) else { throw ZoraError.malformed("�ֿ����س��Ȼ���Ӧ�ֽ�����һ��") }
+                  result.parameters.first == UInt32(result.data.count) else { throw ZoraError.malformed("分块下载长度或响应字节数不一致") }
             try file.write(contentsOf: result.data); offset += UInt32(result.data.count)
         }
         try file.synchronize(); try file.close()

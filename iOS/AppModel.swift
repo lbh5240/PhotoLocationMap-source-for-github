@@ -71,7 +71,7 @@ struct CameraWiFiProfile: Codable {
         connectivity.bluetooth.onAuthenticated = { [weak self] in self?.autoWakeIfReady() }
         usb.onRemoval = { [weak self] in
             guard let self, connectionType == "USB" else { return }
-            device = nil; properties = []; recordingRequested = false; remoteControl = false; notice = "USB �ѶϿ�������״̬�������Ϊ׼"
+            device = nil; properties = []; recordingRequested = false; remoteControl = false; notice = "USB 已断开，拍摄状态请以相机为准"
             Task { await self.stopStream() }
         }
         connectivity.bluetooth.resume(foreground: foreground)
@@ -94,28 +94,28 @@ struct CameraWiFiProfile: Codable {
         perform { try await self.wakeAndConnect() }
     }
     func saveCameraWiFi(ssid: String, password: String, host: String) throws {
-        guard let id = connectivity.bluetooth.identity?.peripheralID else { throw ZoraError.unsupported("�������������֤���ٰ󶨴������ Wi-Fi") }
+        guard let id = connectivity.bluetooth.identity?.peripheralID else { throw ZoraError.unsupported("请先完成蓝牙认证，再绑定此相机的 Wi-Fi") }
         guard !ssid.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !host.isEmpty,
-              password.isEmpty || (8...63).contains(password.utf8.count) else { throw ZoraError.malformed("��������Ч SSID����ַ�� 8�C63 �ֽڵ� Wi-Fi ����") }
+              password.isEmpty || (8...63).contains(password.utf8.count) else { throw ZoraError.malformed("请输入有效 SSID、地址及 8–63 字节的 Wi-Fi 密码") }
         try Keychain.saveValue(CameraWiFiProfile(peripheralID: id, ssid: ssid, password: password, host: host), id: "nikon.wifi")
-        notice = "��� Wi-Fi �ѱ��浽����Կ�״����������ѿ��Զ��ν�����"
+        notice = "相机 Wi-Fi 已保存到本机钥匙串，后续唤醒可自动衔接连接"
     }
     func wakeAndConnect() async throws {
-        guard foreground else { throw ZoraError.unsupported("��ص�ǰ̨������ Wi-Fi ����") }
+        guard foreground else { throw ZoraError.unsupported("请回到前台完成相机 Wi-Fi 连接") }
         let profile = try Keychain.loadValue(CameraWiFiProfile.self, id: "nikon.wifi")
         let generation = connectivity.bluetooth.automationGeneration
         func checkConnectionIntent() throws {
             try Task.checkCancellation()
             guard foreground, generation == connectivity.bluetooth.automationGeneration,
                   profile.peripheralID == connectivity.bluetooth.identity?.peripheralID else {
-                throw ZoraError.unsupported("�Զ�������ֹͣ������ǰ̨����ѡ�����")
+                throw ZoraError.unsupported("自动连接已停止，请在前台重新选择相机")
             }
         }
-        guard profile.peripheralID == connectivity.bluetooth.identity?.peripheralID else { throw ZoraError.unsupported("Wi-Fi ����������һ̨����������±���") }
-        connectionProgress = "1/3 �� ����������������"
+        guard profile.peripheralID == connectivity.bluetooth.identity?.peripheralID else { throw ZoraError.unsupported("Wi-Fi 资料属于另一台相机，请重新保存") }
+        connectionProgress = "1/3 · 发送蓝牙唤醒请求"
         defer { connectionProgress = nil }
         try await connectivity.bluetooth.wakeWiFi()
-        connectionProgress = "2/3 �� �ȴ�����ȵ� �� ������ iOS ��������"
+        connectionProgress = "2/3 · 等待相机热点 · 请允许 iOS 加入网络"
         var joinError: Error?
         for delay in [2, 3, 5] {
             try await Task.sleep(for: .seconds(delay)); try checkConnectionIntent()
@@ -129,7 +129,7 @@ struct CameraWiFiProfile: Codable {
             }
         }
         if let joinError { throw joinError }
-        connectionProgress = "3/3 �� ��֤��ʵ PTP ����Ự"
+        connectionProgress = "3/3 · 验证真实 PTP 相机会话"
         var lastError: Error = ZoraError.disconnected
         for _ in 0..<4 {
             try checkConnectionIntent()
@@ -169,7 +169,7 @@ struct CameraWiFiProfile: Codable {
         device = try await camera.connect(host: host)
         connectionType = "Wi-Fi"; remoteControl = false; recordingRequested = false
         // Connection success comes only from real handshake + GetDeviceInfo + OpenSession.
-        notice = "��ʵ PTP �Ự�ѽ������豸�����Ѷ�ȡ�������������������֤"
+        notice = "真实 PTP 会话已建立；设备能力已读取，具体操作仍需逐项验证"
         do { properties = try await camera.properties() } catch { self.error = error.localizedDescription }
     }
     func connectUSB(_ id: String) async throws {
@@ -179,28 +179,28 @@ struct CameraWiFiProfile: Codable {
         try usb.select(id)
         device = try await camera.connect(using: usb)
         connectionType = "USB"; remoteControl = false; recordingRequested = false
-        notice = "ϵͳ USB �Ự�� Nikon �豸��Ϣ����֤�����幦�������������"
+        notice = "系统 USB 会话与 Nikon 设备信息已验证；具体功能仍需真机验收"
         do { properties = try await camera.properties() } catch { self.error = error.localizedDescription }
     }
     func disconnect() async throws { await stopStream(); try await camera.disconnect(); device = nil; connectionType = nil; properties = []; cameraObjects = []; remoteControl = false; recordingRequested = false }
     func setRemoteControl(_ enabled: Bool) async throws {
         await stopStream(); try await camera.setRemoteControl(enabled); remoteControl = enabled
-        notice = enabled ? "�������Զ�̽ӹܣ����ֻ�������������ʱ��������ɺ����ͷſ���" : "��������ͷ�Զ�̿���"
+        notice = enabled ? "相机接受远程接管；部分机身按键可能暂时锁定，完成后请释放控制" : "相机接受释放远程控制"
     }
     func setMovieRecording(_ enabled: Bool) async throws {
         try await withLiveControl(ensureLive: enabled) {
             if enabled { try await self.camera.startMovie() } else { try await self.camera.stopMovie() }
         }
         recordingRequested = enabled
-        notice = enabled ? "����ѽ��ܿ�ʼ¼��ָ����Ի���¼��ָʾ/����¼�ȷ��" : "����ѽ���ֹͣ¼��ָ���ȷ���ļ�д�����"
+        notice = enabled ? "相机已接受开始录像指令，请以机身录制指示/完成事件确认" : "相机已接受停止录像指令，请确认文件写入完成"
     }
     func driveFocus(near: Bool, steps: UInt32) async throws {
         let result = try await withLiveControl(ensureLive: true) { try await self.camera.driveFocus(near: near, steps: steps) }
         switch result {
-        case .completed: notice = "����ѷ��ضԽ���������"
-        case .accepted: notice = "����ѽ��ܶԽ�������δ�ṩ���״̬��ѯ"
-        case .endOfTravel: notice = "��ͷ�ѵ������г̱߽�"
-        case .stepTooSmall: notice = "�Խ�������С�������������"
+        case .completed: notice = "相机已返回对焦驱动就绪"
+        case .accepted: notice = "相机已接受对焦驱动；未提供完成状态查询"
+        case .endOfTravel: notice = "镜头已到调焦行程边界"
+        case .stepTooSmall: notice = "对焦步长过小，请增大后重试"
         }
     }
     /// Pause polling without EndLiveView: Nikon MF/movie commands require the
@@ -220,7 +220,7 @@ struct CameraWiFiProfile: Codable {
     }
     func startStream() async throws {
         guard !streaming else { return }
-        guard device?.canLiveView == true else { throw ZoraError.unsupported("���û���������� Nikon Live View ����") }
+        guard device?.canLiveView == true else { throw ZoraError.unsupported("相机没有声明完整 Nikon Live View 能力") }
         try await camera.startLiveView(); streaming = true
         liveTask = Task { [weak self] in
             guard let self else { return }
@@ -246,7 +246,7 @@ struct CameraWiFiProfile: Codable {
     }
     func capture() async throws {
         await stopStream(); try await camera.capture()
-        notice = "����ѽ��ܿ���ָ���ˢ������ļ�ȷ����Ƭ���̡�"
+        notice = "相机已接受快门指令。请刷新相机文件确认照片落盘。"
     }
     func set(_ property: CameraProperty, value: Int64) async throws {
         await stopStream(); try await camera.set(property, value: value); properties = try await camera.properties()
@@ -254,13 +254,13 @@ struct CameraWiFiProfile: Codable {
     func listCameraFiles() async throws {
         await stopStream(); cardStorageIDs = try await camera.storageIDs(); storages = []
         if device?.operations.contains(PTPOperation.storageInfo) == true {
-            for id in cardStorageIDs { do { storages.append(try await camera.storageInfo(id)) } catch { notice = "���ִ洢����Ϣ���ɶ�ȡ��\(error.localizedDescription)" } }
+            for id in cardStorageIDs { do { storages.append(try await camera.storageInfo(id)) } catch { notice = "部分存储卡信息不可读取：\(error.localizedDescription)" } }
         }
         if selectedStorage == nil || !cardStorageIDs.contains(selectedStorage!) { selectedStorage = cardStorageIDs.first }
         try await loadCameraPage(reset: true)
     }
     func loadCameraPage(reset: Bool) async throws {
-        if !reset, directoryRevision != (await camera.storageRevision) { throw ZoraError.unsupported("����ļ��ѱ仯������ˢ��Ŀ¼�ټ�����ҳ") }
+        if !reset, directoryRevision != (await camera.storageRevision) { throw ZoraError.unsupported("相机文件已变化，请先刷新目录再继续分页") }
         guard let id = selectedStorage else { cameraObjects = []; nextObjectOffset = nil; objectTotal = 0; return }
         let page = try await camera.objectPage(storage: id, offset: reset ? 0 : nextObjectOffset ?? 0)
         if reset { cameraObjects = page.objects } else {
@@ -283,7 +283,7 @@ struct CameraWiFiProfile: Codable {
         await refresh()
     }
     func enqueue(_ asset: LibraryAsset) async throws {
-        guard let destination else { throw ZoraError.unsupported("�������� NAS") }
+        guard let destination else { throw ZoraError.unsupported("请先配置 NAS") }
         let file = try await library.url(for: asset)
         // Stable unique key: reattempts never create a second remote object.
         let key = destination.kind == .webDAV ? "\(asset.id.uuidString)-\(asset.originalName)" : "\(asset.id.uuidString)/\(asset.originalName)"
@@ -305,10 +305,10 @@ struct CameraWiFiProfile: Codable {
            current.bucket == valid.bucket, current.region == valid.region, current.prefix == valid.prefix {
             valid.credentialID = current.credentialID // Updating a password must repair pending jobs for this destination.
         } else { valid.credentialID = "nas-\(UUID().uuidString)" }
-        guard !username.isEmpty, !secret.isEmpty else { throw ZoraError.malformed("�������û���/Access Key ������/Secret Key") }
+        guard !username.isEmpty, !secret.isEmpty else { throw ZoraError.malformed("请输入用户名/Access Key 与密码/Secret Key") }
         try Keychain.save(NASCredential(username: username, secret: secret, token: token.isEmpty ? nil : token), id: valid.credentialID)
         UserDefaults.standard.set(try JSONEncoder().encode(valid), forKey: "nasDestination"); destination = valid
-        notice = "NAS �����ѱ��档WebDAV Ŀ��Ŀ¼��Ԥ�ȴ�����ʵ���ϴ������������С�"
+        notice = "NAS 配置已保存。WebDAV 目标目录需预先创建；实际上传结果见任务队列。"
     }
     func importLook(_ url: URL) throws {
         let access = url.startAccessingSecurityScopedResource(); defer { if access { url.stopAccessingSecurityScopedResource() } }

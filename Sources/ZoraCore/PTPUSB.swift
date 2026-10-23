@@ -49,7 +49,7 @@ public enum PTPUSBContainer {
     public static func response(_ bytes: Data, payload: Data, expectedTransaction: UInt32? = nil) throws -> PTPResult {
         let header = try parse(bytes, type: 3, maximumParameters: 5)
         if let expectedTransaction, header.transaction != expectedTransaction { throw ZoraError.malformed("USB PTP response transaction") }
-        guard payload.count <= PTPFramer.maximumPacket else { throw ZoraError.unsupported("USB ���δ��䳬���ڴ����ޣ���ʹ�÷ֿ�����") }
+        guard payload.count <= PTPFramer.maximumPacket else { throw ZoraError.unsupported("USB 单次传输超过内存上限，请使用分块下载") }
         guard header.code == 0x2001 else { throw ZoraError.cameraResponse(header.code) }
         return PTPResult(data: payload, parameters: header.parameters)
     }

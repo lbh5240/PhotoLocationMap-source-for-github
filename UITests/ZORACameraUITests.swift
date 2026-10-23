@@ -4,26 +4,26 @@ import XCTest
     func testDisconnectedCameraDoesNotPresentFakeLiveView() {
         let app = XCUIApplication(); app.launch()
         XCTAssertTrue(app.buttons["connectCamera"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.staticTexts["�ȴ���� Nikon Z7 II"].exists)
-        XCTAssertFalse(app.buttons["�ͷſ���"].isEnabled)
+        XCTAssertTrue(app.staticTexts["等待你的 Nikon Z7 II"].exists)
+        XCTAssertFalse(app.buttons["释放快门"].isEnabled)
         app.buttons["connectCamera"].tap()
-        XCTAssertTrue(app.buttons["���� Nikon ���"].waitForExistence(timeout: 3))
-        XCTAssertFalse(app.staticTexts["Nikon ������֤���"].exists)
+        XCTAssertTrue(app.buttons["搜索 Nikon 相机"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.staticTexts["Nikon 蓝牙认证完成"].exists)
     }
     func testLibraryAndLooksNavigation() {
         let app = XCUIApplication(); app.launch()
-        app.tabBars.buttons["��Ƭ"].tap()
+        app.tabBars.buttons["照片"].tap()
         XCTAssertTrue(app.buttons["importPhotos"].waitForExistence(timeout: 5))
-        app.tabBars.buttons["���"].tap()
-        XCTAssertTrue(app.staticTexts["�����չ�"].waitForExistence(timeout: 5))
+        app.tabBars.buttons["风格"].tap()
+        XCTAssertTrue(app.staticTexts["琥珀日光"].waitForExistence(timeout: 5))
     }
     func testUSBSimulatorNeverPretendsACameraIsConnected() {
         let app = XCUIApplication(); app.launch()
         XCTAssertTrue(app.buttons["connectCamera"].waitForExistence(timeout: 10))
         app.buttons["connectCamera"].tap()
-        app.segmentedControls["connectionMode"].buttons["USB ����"].tap()
+        app.segmentedControls["connectionMode"].buttons["USB 有线"].tap()
         app.buttons["searchUSBCamera"].tap()
-        XCTAssertTrue(app.staticTexts["ģ��������������ʵ USB �������ʹ�� iPhone / iPad"].waitForExistence(timeout: 3))
-        XCTAssertFalse(app.buttons["�Ͽ� USB �Ự"].exists)
+        XCTAssertTrue(app.staticTexts["模拟器不能连接真实 USB 相机，请使用 iPhone / iPad"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["断开 USB 会话"].exists)
     }
 }

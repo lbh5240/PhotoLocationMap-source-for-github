@@ -37,11 +37,11 @@ public struct CameraProperty: Identifiable, Sendable {
         case 4: return Int64(try r.integer(UInt16.self))
         case 5: return Int64(Int32(bitPattern: try r.integer(UInt32.self)))
         case 6: return Int64(try r.integer(UInt32.self))
-        default: throw ZoraError.unsupported("�Ǳ�������� 32 λ���������")
+        default: throw ZoraError.unsupported("非标量或大于 32 位的相机属性")
         }
     }
     public func encode(_ value: Int64) throws -> Data {
-        guard writable, allowed.isEmpty || allowed.contains(value), range == nil || range!.contains(value) else { throw ZoraError.unsupported("����ֻ�����������֧��") }
+        guard writable, allowed.isEmpty || allowed.contains(value), range == nil || range!.contains(value) else { throw ZoraError.unsupported("属性只读或参数不受支持") }
         if let range, let step { guard (value-range.lowerBound) % step == 0 else { throw ZoraError.malformed("property step") } }
         var data = Data()
         switch type {
@@ -57,10 +57,10 @@ public struct CameraProperty: Identifiable, Sendable {
     }
     public var title: String {
         switch code {
-        case 0x5007: "��Ȧ ��100"; case 0x500D: "���� 1/10000 ��"; case 0x500F: "ISO"; case 0x5010: "�عⲹ�� ��1000"
-        case 0x5005: "��ƽ��"; case 0x500e: "�ع�ģʽ"; case 0x500a: "�Խ�ģʽ"; case 0x500b: "���ģʽ"
-        case 0x5004: "ͼ��ѹ��"; case 0x5013: "����ģʽ"; case 0x5001: "���� %"
-        default: String(format: "���� %04X", code)
+        case 0x5007: "光圈 ×100"; case 0x500D: "快门 1/10000 秒"; case 0x500F: "ISO"; case 0x5010: "曝光补偿 ×1000"
+        case 0x5005: "白平衡"; case 0x500e: "曝光模式"; case 0x500a: "对焦模式"; case 0x500b: "测光模式"
+        case 0x5004: "图像压缩"; case 0x5013: "连拍模式"; case 0x5001: "电量 %"
+        default: String(format: "属性 %04X", code)
         }
     }
 }

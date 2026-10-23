@@ -104,7 +104,7 @@ public struct PTPTransaction: Sendable {
         case 9:
             guard expected == nil, try r.integer(UInt32.self) == id else { throw ZoraError.malformed("StartData transaction") }
             expected = try r.integer(UInt64.self)
-            guard expected! <= UInt64(PTPFramer.maximumPacket) else { throw ZoraError.unsupported("��������ļ���������Ϊ 64 MiB") }
+            guard expected! <= UInt64(PTPFramer.maximumPacket) else { throw ZoraError.unsupported("单次相机文件下载上限为 64 MiB") }
         case 10, 12:
             guard expected != nil, !ended, try r.integer(UInt32.self) == id else { throw ZoraError.malformed("Data transaction") }
             let bytes = try r.bytes(packet.payload.count - 4)

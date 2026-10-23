@@ -9,7 +9,7 @@ import ZoraCore
     @preconcurrency ICDeviceBrowserDelegate, @preconcurrency ICCameraDeviceDelegate {
     struct Found: Identifiable { let id: String; let name: String }
     private(set) var cameras: [Found] = []
-    private(set) var status = "USB ��δ����"
+    private(set) var status = "USB 尚未搜索"
     private(set) var selectedID: String?
     private let browser = ICDeviceBrowser()
     private var devices: [String: ICCameraDevice] = [:]
@@ -26,28 +26,28 @@ import ZoraCore
 
     func search() async {
         #if targetEnvironment(simulator)
-        status = "ģ��������������ʵ USB �������ʹ�� iPhone / iPad"
+        status = "模拟器不能连接真实 USB 相机，请使用 iPhone / iPad"
         #else
-        guard !browsing else { status = cameras.isEmpty ? "���ڼ��� USB ��Σ����������ߡ������Դ��Ȩ��" : "��ѡ�� Nikon USB ���"; return }
+        guard !browsing else { status = cameras.isEmpty ? "正在监听 USB 插拔，请检查数据线、相机电源与权限" : "请选择 Nikon USB 相机"; return }
         browser.delegate = self
         let allowed = await withCheckedContinuation { c in browser.requestContentsAuthorization { value in c.resume(returning: value == .authorized) } }
-        guard allowed else { status = "USB ý�����δ����Ȩ������ϵͳ��˽���������� ZORA"; return }
-        browsing = true; browser.start(); status = "���� USB ��� �� �����������߲��������"
+        guard allowed else { status = "USB 媒体访问未获授权，请在系统隐私设置中允许 ZORA"; return }
+        browsing = true; browser.start(); status = "监听 USB 相机 · 请连接数据线并开启相机"
         #endif
     }
     func select(_ id: String) throws {
-        guard !opened, !closing, camera == nil, devices[id] != nil else { throw ZoraError.unsupported("���ȵȴ����� USB �Ự�Ͽ�����ѡ���������ӵ����") }
+        guard !opened, !closing, camera == nil, devices[id] != nil else { throw ZoraError.unsupported("请先等待现有 USB 会话断开，再选择仍在连接的相机") }
         selectedID = id
     }
     func open() async throws {
         guard !closing else { throw ZoraError.busy }
         guard let id = selectedID, let device = devices[id], device.usbVendorID == 0x04b0 else { throw ZoraError.disconnected }
         let allowed = await withCheckedContinuation { c in browser.requestControlAuthorization { value in c.resume(returning: value == .authorized) } }
-        guard allowed else { throw ZoraError.unsupported("USB �������Ȩ��δ����Ȩ") }
-        guard device.capabilities.contains(ICDeviceCapability.cameraDeviceCanAcceptPTPCommands.rawValue) else { throw ZoraError.unsupported("�� USB �豸δ�ṩ PTP ��������") }
+        guard allowed else { throw ZoraError.unsupported("USB 相机控制权限未获授权") }
+        guard device.capabilities.contains(ICDeviceCapability.cameraDeviceCanAcceptPTPCommands.rawValue) else { throw ZoraError.unsupported("此 USB 设备未提供 PTP 命令能力") }
         guard camera == nil else { throw ZoraError.busy }
         epoch = UUID(); let token = epoch
-        camera = device; device.delegate = self; status = "���ڴ�ϵͳ USB ����Ự��"
+        camera = device; device.delegate = self; status = "正在打开系统 USB 相机会话…"
         let pair = AsyncStream<CameraTransportEvent>.makeStream(bufferingPolicy: .bufferingNewest(64))
         stream = pair.stream; eventSink = pair.continuation
         do {
@@ -59,7 +59,7 @@ import ZoraCore
                         guard let self, lifecycle?.0 == token, epoch == token else { return }
                         let waiter = lifecycle?.1; lifecycle = nil
                         if let message { waiter?.resume(throwing: ZoraError.unsupported(message)) }
-                        else { opened = true; status = "ϵͳ USB �Ự�Ѵ򿪣����ڶ�ȡ�������"; waiter?.resume() }
+                        else { opened = true; status = "系统 USB 会话已打开，正在读取相机能力"; waiter?.resume() }
                     }
                 }
                 Task { [weak self] in
@@ -74,7 +74,7 @@ import ZoraCore
         try Task.checkCancellation()
         guard opened, let device = camera else { throw ZoraError.disconnected }
         guard pending == nil else { throw ZoraError.busy }
-        guard code != PTPOperation.openSession, code != PTPOperation.closeSession else { throw ZoraError.unsupported("USB �Ự���������� ImageCaptureCore ����") }
+        guard code != PTPOperation.openSession, code != PTPOperation.closeSession else { throw ZoraError.unsupported("USB 会话生命周期由 ImageCaptureCore 管理") }
         let command = try PTPUSBContainer.command(code: code, transaction: transaction, parameters: parameters)
         let token = UUID(), session = epoch
         return try await withTaskCancellationHandler {
@@ -125,26 +125,26 @@ import ZoraCore
             old.requestCloseSession(options: nil) { _ in gate.resume() }
             Task { try? await Task.sleep(for: .seconds(5)); gate.resume() }
         }
-        old.delegate = nil; status = "USB �Ự�ѹر�"
+        old.delegate = nil; status = "USB 会话已关闭"
     }
     func deviceBrowser(_ browser: ICDeviceBrowser, didAdd device: ICDevice, moreComing: Bool) {
         guard let item = device as? ICCameraDevice, item.usbVendorID == 0x04b0,
               item.transportType == ICDeviceTransport.transportTypeUSB.rawValue, let id = item.uuidString else { return }
-        devices[id] = item; cameras.removeAll { $0.id == id }; cameras.append(Found(id: id, name: item.name ?? "Nikon USB ���"))
-        status = "�ѷ��� Nikon USB �������ѡ������"
+        devices[id] = item; cameras.removeAll { $0.id == id }; cameras.append(Found(id: id, name: item.name ?? "Nikon USB 相机"))
+        status = "已发现 Nikon USB 相机，请选择连接"
     }
     func deviceBrowser(_ browser: ICDeviceBrowser, didRemove device: ICDevice, moreGoing: Bool) {
         if let id = device.uuidString { devices.removeValue(forKey: id); cameras.removeAll { $0.id == id } }
         if device === camera { removed() }
     }
-    private func removed() { invalidate(ZoraError.disconnected); onRemoval?(); status = "USB ����Ѱγ�����ֹͣ�Ự" }
+    private func removed() { invalidate(ZoraError.disconnected); onRemoval?(); status = "USB 相机已拔出，已停止会话" }
     func device(_ device: ICDevice, didOpenSessionWithError error: Error?) {}
     func device(_ device: ICDevice, didCloseSessionWithError error: Error?) {}
     func didRemove(_ device: ICDevice) { if device === camera { removed() } }
     func cameraDevice(_ camera: ICCameraDevice, didReceivePTPEvent eventData: Data) {
         guard camera === self.camera, opened else { return }
         do { eventSink?.yield(.ptp(try CameraEvent(usbContainer: eventData))) }
-        catch { status = "�յ��޷������� USB �¼���δ�ݴ˸�����Ƭ״̬" }
+        catch { status = "收到无法解析的 USB 事件，未据此更新照片状态" }
     }
     func cameraDevice(_ camera: ICCameraDevice, didAdd items: [ICCameraItem]) {}
     func cameraDevice(_ camera: ICCameraDevice, didRemove items: [ICCameraItem]) {}
