@@ -8,6 +8,7 @@ import XCTest
         XCTAssertFalse(app.buttons["释放快门"].isEnabled)
         app.buttons["connectCamera"].tap()
         XCTAssertTrue(app.buttons["搜索 Nikon 相机"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.otherElements["pairingSteps"].exists || app.staticTexts["建立蓝牙链路"].exists)
         XCTAssertFalse(app.staticTexts["Nikon 蓝牙认证完成"].exists)
     }
     func testLibraryAndLooksNavigation() {

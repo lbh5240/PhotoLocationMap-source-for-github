@@ -8,6 +8,15 @@ struct CameraWiFiProfile: Codable {
     let ssid: String
     let password: String
     let host: String
+    let cameraSerial: String?
+    init(peripheralID: UUID, ssid: String, password: String, host: String, cameraSerial: String? = nil) {
+        self.peripheralID = peripheralID; self.ssid = ssid; self.password = password; self.host = host; self.cameraSerial = cameraSerial
+    }
+    func matches(_ identity: NikonBLEIdentity?) -> Bool {
+        guard let identity else { return false }
+        if let cameraSerial { return cameraSerial == identity.serial }
+        return peripheralID == identity.peripheralID
+    }
 }
 
 @MainActor @Observable final class AppModel {
@@ -51,6 +60,7 @@ struct CameraWiFiProfile: Codable {
     private let root: URL
     private var liveTask: Task<Void, Never>?
     private var worker: Task<Void, Never>?
+    private var operationTask: Task<Void, Never>?
     private var foreground = true
     init() throws {
         root = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true).appendingPathComponent("ZORA", isDirectory: true)
@@ -71,7 +81,7 @@ struct CameraWiFiProfile: Codable {
         connectivity.bluetooth.onAuthenticated = { [weak self] in self?.autoWakeIfReady() }
         usb.onRemoval = { [weak self] in
             guard let self, connectionType == "USB" else { return }
-            device = nil; properties = []; recordingRequested = false; remoteControl = false; notice = "USB 已断开，拍摄状态请以相机为准"
+            device = nil; connectionType = nil; properties = []; recordingRequested = false; remoteControl = false; notice = "USB 控制已中断，拍摄状态请以相机为准"
             Task { await self.stopStream() }
         }
         connectivity.bluetooth.resume(foreground: foreground)
@@ -90,14 +100,14 @@ struct CameraWiFiProfile: Codable {
     private func autoWakeIfReady() {
         guard autoWake, !usbSelected, foreground, !busy, device == nil, connectivity.bluetooth.authenticated,
               let profile = try? Keychain.loadValue(CameraWiFiProfile.self, id: "nikon.wifi"),
-              profile.peripheralID == connectivity.bluetooth.identity?.peripheralID else { return }
+              profile.matches(connectivity.bluetooth.identity) else { return }
         perform { try await self.wakeAndConnect() }
     }
     func saveCameraWiFi(ssid: String, password: String, host: String) throws {
-        guard let id = connectivity.bluetooth.identity?.peripheralID else { throw ZoraError.unsupported("请先完成蓝牙认证，再绑定此相机的 Wi-Fi") }
+        guard connectivity.bluetooth.authenticated, let identity = connectivity.bluetooth.identity else { throw ZoraError.unsupported("请先完成相机配对注册，再保存 Wi-Fi") }
         guard !ssid.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !host.isEmpty,
               password.isEmpty || (8...63).contains(password.utf8.count) else { throw ZoraError.malformed("请输入有效 SSID、地址及 8–63 字节的 Wi-Fi 密码") }
-        try Keychain.saveValue(CameraWiFiProfile(peripheralID: id, ssid: ssid, password: password, host: host), id: "nikon.wifi")
+        try Keychain.saveValue(CameraWiFiProfile(peripheralID: identity.peripheralID, ssid: ssid, password: password, host: host, cameraSerial: identity.serial), id: "nikon.wifi")
         notice = "相机 Wi-Fi 已保存到本机钥匙串，后续唤醒可自动衔接连接"
     }
     func wakeAndConnect() async throws {
@@ -107,11 +117,14 @@ struct CameraWiFiProfile: Codable {
         func checkConnectionIntent() throws {
             try Task.checkCancellation()
             guard foreground, generation == connectivity.bluetooth.automationGeneration,
-                  profile.peripheralID == connectivity.bluetooth.identity?.peripheralID else {
+                  profile.matches(connectivity.bluetooth.identity) else {
                 throw ZoraError.unsupported("自动连接已停止，请在前台重新选择相机")
             }
         }
-        guard profile.peripheralID == connectivity.bluetooth.identity?.peripheralID else { throw ZoraError.unsupported("Wi-Fi 资料属于另一台相机，请重新保存") }
+        guard profile.matches(connectivity.bluetooth.identity) else { throw ZoraError.unsupported("Wi-Fi 资料属于另一台相机，请重新保存") }
+        if profile.cameraSerial == nil, let id = connectivity.bluetooth.identity {
+            try Keychain.saveValue(CameraWiFiProfile(peripheralID: id.peripheralID, ssid: profile.ssid, password: profile.password, host: profile.host, cameraSerial: id.serial), id: "nikon.wifi")
+        }
         connectionProgress = "1/3 · 发送蓝牙唤醒请求"
         defer { connectionProgress = nil }
         try await connectivity.bluetooth.wakeWiFi()
@@ -152,16 +165,18 @@ struct CameraWiFiProfile: Codable {
     }
     func perform(_ operation: @escaping @MainActor () async throws -> Void) {
         guard !busy else { return }; busy = true
-        Task {
+        operationTask = Task {
             defer { busy = false }
             do { try await operation(); await refresh() }
             catch {
-                self.error = error.localizedDescription
+                if error is CancellationError { notice = "后续操作已取消，已发出的相机指令请以机身状态为准" }
+                else { self.error = error.localizedDescription }
                 device = await camera.device
-                if device == nil { await stopStream(); properties = [] }
+                if device == nil { await stopStream(); connectionType = nil; properties = []; remoteControl = false; recordingRequested = false }
             }
         }
     }
+    func cancelOperation() { operationTask?.cancel() }
     func connect(host: String) async throws {
         usbSelected = false
         await stopStream()
@@ -190,8 +205,8 @@ struct CameraWiFiProfile: Codable {
     func setMovieRecording(_ enabled: Bool) async throws {
         try await withLiveControl(ensureLive: enabled) {
             if enabled { try await self.camera.startMovie() } else { try await self.camera.stopMovie() }
+            self.recordingRequested = enabled
         }
-        recordingRequested = enabled
         notice = enabled ? "相机已接受开始录像指令，请以机身录制指示/完成事件确认" : "相机已接受停止录像指令，请确认文件写入完成"
     }
     func driveFocus(near: Bool, steps: UInt32) async throws {
@@ -208,15 +223,19 @@ struct CameraWiFiProfile: Codable {
     private func withLiveControl<T: Sendable>(ensureLive: Bool, operation: @MainActor () async throws -> T) async throws -> T {
         let resume = streaming || ensureLive
         streaming = false; await liveTask?.value; liveTask = nil
+        let result: T
         do {
             if ensureLive { try await camera.startLiveView() }
-            let result = try await operation()
-            if resume, foreground { try await startStream() }
-            return result
+            result = try await operation()
         } catch {
             if resume, foreground { try? await startStream() }
             throw error
         }
+        if resume, foreground {
+            do { try await startStream() }
+            catch { self.error = "相机指令已被接受，但监看恢复失败；请勿因此重复发送拍摄指令。\(error.localizedDescription)" }
+        }
+        return result
     }
     func startStream() async throws {
         guard !streaming else { return }

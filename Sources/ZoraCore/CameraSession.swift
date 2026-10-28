@@ -247,6 +247,7 @@ public actor CameraSession {
             try file.write(contentsOf: result.data); offset += UInt32(result.data.count)
         }
         try file.synchronize(); try file.close()
+        try Task.checkCancellation(); guard generation == expected else { throw ZoraError.disconnected }
         try FileManager.default.moveItem(at: staging, to: target)
     }
 }

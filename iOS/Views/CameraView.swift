@@ -208,6 +208,18 @@ struct ConnectionView: View {
                 Section("1 · 蓝牙配对与唤醒") {
                     Text("首次连接：在 Z7 II 中开启“连接至智能设备 → 配对（蓝牙）”，再扫描并选择相机。按系统和相机提示确认配对码。")
                     Label(bluetooth.status, systemImage: bluetooth.authenticated ? "checkmark.shield" : "antenna.radiowaves.left.and.right").font(.caption)
+                    VStack(alignment: .leading, spacing: 7) {
+                        ForEach(Array(["建立蓝牙链路", "Nikon 身份握手", "两端确认系统配对码", "相机注册与校时", "验证完成，允许 Wi-Fi 连接"].enumerated()), id: \.offset) { index, title in
+                            let complete = index == 2 ? bluetooth.systemPairingConfirmed : bluetooth.authenticated || bluetooth.step > index+1
+                            Label(title, systemImage: complete ? "checkmark.circle.fill" : bluetooth.step == index+1 ? "circle.inset.filled" : "circle")
+                                .font(.caption).foregroundStyle(bluetooth.step == index+1 ? Color.zoraAmber : .secondary)
+                        }
+                    }.accessibilityIdentifier("pairingSteps")
+                    Text("确认配对码后，还需等待相机完成注册。注册通过前不会自动开启 Wi-Fi；六位码只在系统/相机窗口确认。") .font(.caption).foregroundStyle(.secondary)
+                    if bluetooth.working {
+                        ProgressView("正在等待相机 / 系统响应")
+                        Button("取消当前配对") { bluetooth.disconnect() }
+                    }
                     Button("搜索 Nikon 相机", systemImage: "dot.radiowaves.left.and.right") { bluetooth.scan() }.disabled(bluetooth.working || bluetooth.authenticated)
                     ForEach(bluetooth.nearby.sorted(by: { $0.rssi > $1.rssi })) { item in
                         Button { bluetooth.connect(item.id) } label: {
@@ -215,7 +227,8 @@ struct ConnectionView: View {
                         }.disabled(bluetooth.working || bluetooth.authenticated)
                     }
                     if bluetooth.identity != nil {
-                        Button("重连已保存相机") { bluetooth.retrySaved() }.disabled(bluetooth.working || bluetooth.authenticated)
+                        Button(bluetooth.identity?.registrationVerified == true ? "重连已保存相机" : "继续验证未完成的相机配对") { bluetooth.retrySaved() }.disabled(bluetooth.working || bluetooth.authenticated)
+                        if !bluetooth.authenticated { Button("继续系统配对并重新验证") { bluetooth.showSystemPairing() }.disabled(bluetooth.working) }
                         Toggle("自动重连已配对相机", isOn: $bluetooth.autoReconnect)
                         Toggle("前台连接后自动唤醒并连接 Wi-Fi", isOn: $settings.autoWake)
                         Button("唤醒并连接相机", systemImage: "bolt.horizontal.circle") { model.perform { try await model.wakeAndConnect(); dismiss() } }
@@ -226,8 +239,8 @@ struct ConnectionView: View {
                         Button("忘记本机相机资料", role: .destructive) { bluetooth.disconnect(forget: true) }
                     }
                     DisclosureGroup("首次系统绑定与兼容性说明") {
-                        Text("Nikon 认证完成不等于系统绑定完成。如相机仍要求配对，可打开系统配件选择器，或到 iPhone 蓝牙设置中确认相机，再返回重连。部分 iOS/相机组合可能不显示系统选择器。")
-                        Button("打开系统配件选择器") { bluetooth.showSystemPairing() }
+                        Text("如果确认配对码后相机仍在等待，点“继续验证未完成的相机配对”；仍未完成时再点“继续系统配对并重新验证”。App 会先释放旧链路，再打开系统选择器，保留原身份重连并验证相机注册。旧系统绑定冲突时，可在 iPhone 蓝牙设置中忽略该相机，再从相机菜单开始新配对。")
+                        Button("打开系统配件选择器并验证") { bluetooth.showSystemPairing() }.disabled(bluetooth.working)
                         Text("自动唤醒需要相机蓝牙保持开启；关机连接还受相机“关机时发送”设置影响。飞行模式、取出电池、强制退出 App 或系统后台限制时无法保证唤醒。后台恢复只重连保存的相机，Wi-Fi 切换在前台完成。")
                     }.font(.caption)
                 }
@@ -249,6 +262,7 @@ struct ConnectionView: View {
                 }
                 }
                 if let progress = model.connectionProgress { Section { ProgressView(progress) } }
+                if model.busy { Section { Button("取消后续连接操作") { model.cancelOperation() } } }
                 Section("连接诊断") {
                     Text("阶段：\(bluetooth.state.rawValue) · PTP：\(model.device == nil ? "未建立" : "已验证")").font(.caption)
                     ShareLink(item: bluetooth.diagnostics.joined(separator: "\n")) { Label("分享不含密码的蓝牙诊断", systemImage: "square.and.arrow.up") }

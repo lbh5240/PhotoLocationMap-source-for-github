@@ -120,12 +120,12 @@ import ZoraCore
         invalidate(ZoraError.disconnected); stream = nil
         guard let old else { return }
         // Closing is bounded. A new open is blocked until this close returns.
-        await withCheckedContinuation { (c: CheckedContinuation<Void, Never>) in
+        let confirmed = await withCheckedContinuation { (c: CheckedContinuation<Bool, Never>) in
             let gate = USBVoidGate(c)
-            old.requestCloseSession(options: nil) { _ in gate.resume() }
-            Task { try? await Task.sleep(for: .seconds(5)); gate.resume() }
+            old.requestCloseSession(options: nil) { error in gate.resume(error == nil) }
+            Task { try? await Task.sleep(for: .seconds(5)); gate.resume(false) }
         }
-        old.delegate = nil; status = "USB 会话已关闭"
+        old.delegate = nil; status = confirmed ? "USB 会话已关闭" : "App 已停止 USB 控制，但系统尚未确认关闭；重新连接前请检查相机"
     }
     func deviceBrowser(_ browser: ICDeviceBrowser, didAdd device: ICDevice, moreComing: Bool) {
         guard let item = device as? ICCameraDevice, item.usbVendorID == 0x04b0,
@@ -139,7 +139,10 @@ import ZoraCore
     }
     private func removed() { invalidate(ZoraError.disconnected); onRemoval?(); status = "USB 相机已拔出，已停止会话" }
     func device(_ device: ICDevice, didOpenSessionWithError error: Error?) {}
-    func device(_ device: ICDevice, didCloseSessionWithError error: Error?) {}
+    func device(_ device: ICDevice, didCloseSessionWithError error: Error?) {
+        guard device === camera, opened else { return }
+        invalidate(error ?? ZoraError.disconnected); onRemoval?(); status = "系统 USB 会话已中断，请重新连接"
+    }
     func didRemove(_ device: ICDevice) { if device === camera { removed() } }
     func cameraDevice(_ camera: ICCameraDevice, didReceivePTPEvent eventData: Data) {
         guard camera === self.camera, opened else { return }
@@ -154,13 +157,16 @@ import ZoraCore
     func cameraDeviceDidChangeCapability(_ camera: ICCameraDevice) {}
     func deviceDidBecomeReady(withCompleteContentCatalog device: ICCameraDevice) {}
     func cameraDeviceDidRemoveAccessRestriction(_ device: ICDevice) {}
-    func cameraDeviceDidEnableAccessRestriction(_ device: ICDevice) {}
+    func cameraDeviceDidEnableAccessRestriction(_ device: ICDevice) {
+        guard device === camera else { return }
+        invalidate(ZoraError.unsupported("USB 相机访问权限受限，请在系统设置中检查授权")); onRemoval?()
+    }
 }
 
 /// Callback and timeout may race on arbitrary system queues.
 private final class USBVoidGate: @unchecked Sendable {
     private let lock = NSLock()
-    private var continuation: CheckedContinuation<Void, Never>?
-    init(_ continuation: CheckedContinuation<Void, Never>) { self.continuation = continuation }
-    func resume() { lock.lock(); let value = continuation; continuation = nil; lock.unlock(); value?.resume() }
+    private var continuation: CheckedContinuation<Bool, Never>?
+    init(_ continuation: CheckedContinuation<Bool, Never>) { self.continuation = continuation }
+    func resume(_ result: Bool) { lock.lock(); let value = continuation; continuation = nil; lock.unlock(); value?.resume(returning: result) }
 }

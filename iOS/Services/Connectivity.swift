@@ -21,11 +21,16 @@ import ZoraCore
         guard !ssid.isEmpty else { throw ZoraError.malformed("请输入相机 SSID") }
         let config = password.isEmpty ? NEHotspotConfiguration(ssid: ssid) : NEHotspotConfiguration(ssid: ssid, passphrase: password, isWEP: false)
         config.joinOnce = true
-        try await withCheckedThrowingContinuation { (c: CheckedContinuation<Void, Error>) in
-            NEHotspotConfigurationManager.shared.apply(config) { error in
-                if let error = error as NSError?, error.code != NEHotspotConfigurationError.alreadyAssociated.rawValue { c.resume(throwing: error) }
-                else { c.resume() }
+        let gate = CallbackGate<Void>()
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (c: CheckedContinuation<Void, Error>) in
+                gate.install(c)
+                NEHotspotConfigurationManager.shared.apply(config) { error in
+                    if let error = error as NSError?, !(error.domain == NEHotspotConfigurationErrorDomain && error.code == NEHotspotConfigurationError.alreadyAssociated.rawValue) { gate.resolve(.failure(error)) }
+                    else { gate.resolve(.success(())) }
+                }
+                Task { try? await Task.sleep(for: .seconds(45)); gate.resolve(.failure(ZoraError.unsupported("系统加入 Wi-Fi 未在时限内完成，请处理系统提示后重试"))) }
             }
-        }
+        } onCancel: { gate.resolve(.failure(CancellationError())) }
     }
 }

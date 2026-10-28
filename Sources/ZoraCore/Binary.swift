@@ -9,7 +9,7 @@ public enum ZoraError: Error, Equatable, Sendable, LocalizedError {
         case .cameraResponse(let code): return String(format: "相机拒绝了本次操作（0x%04X），请检查拍摄模式与相机状态", code)
         case .disconnected: return "尚未连接相机"
         case .busy: return "相机通信正在进行，请稍后重试"
-        case .timeout: return "连接超时，请检查相机 Wi-Fi 与本地网络权限"
+        case .timeout: return "操作超时，请检查相机连接与系统配对或网络提示"
         case .http(let n): return "服务器返回 HTTP \(n)"
         }
     }

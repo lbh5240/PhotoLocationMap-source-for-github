@@ -7,8 +7,66 @@ public struct NikonBLEIdentity: Codable, Equatable, Sendable {
     public let device: UInt32
     public let nonce: UInt32
     public let serial: String
-    public init(peripheralID: UUID, device: UInt32, nonce: UInt32, serial: String) {
+    /// Missing in 0.3 records: authenticated identity is not completed enrollment.
+    public let registrationVerified: Bool?
+    public init(peripheralID: UUID, device: UInt32, nonce: UInt32, serial: String, registrationVerified: Bool? = nil) {
         self.peripheralID = peripheralID; self.device = device; self.nonce = nonce; self.serial = serial
+        self.registrationVerified = registrationVerified
+    }
+}
+
+/// Nikon LSS request bits. Unknown fields and unprovided GPS requests are preserved.
+public struct NikonControlRequest: Sendable, Equatable {
+    public let raw: UInt16
+    public var wantsTime: Bool { raw & 0x000f == 1 }
+    public var wantsConnection: Bool { (raw >> 8) & 0x000f == 1 }
+    public init(_ data: Data) throws {
+        guard data.count == 2 else { throw ZoraError.malformed("Nikon control point must be two bytes") }
+        var reader = BinaryReader(data); raw = try reader.integer()
+    }
+    public func acknowledgment(timeProvided: Bool, connectionProvided: Bool) -> Data {
+        var value = raw
+        if wantsTime, timeProvided { value &= ~UInt16(0x000f) }
+        if wantsConnection, connectionProvided { value &= ~UInt16(0x0100) }
+        var result = Data(); result.appendLE(value); return result
+    }
+}
+
+/// Testable enrollment gate: stage 4/name/OS picker alone never unlock Wi-Fi.
+public struct NikonBLERegistration: Sendable {
+    public private(set) var nameConfirmed = false
+    public private(set) var timeConfirmed = false
+    public private(set) var timeRequested = false
+    public private(set) var connectionRequested = false
+    public private(set) var connectionConfirmed = false
+    public private(set) var requestsAcknowledged = false
+    public let previouslyVerified: Bool
+    public let systemPairingCompleted: Bool
+    public var ready: Bool {
+        nameConfirmed && timeConfirmed && requestsAcknowledged &&
+            (!connectionRequested || connectionConfirmed) && (timeRequested || previouslyVerified || systemPairingCompleted)
+    }
+    public init(previouslyVerified: Bool = false, systemPairingCompleted: Bool = false) {
+        self.previouslyVerified = previouslyVerified; self.systemPairingCompleted = systemPairingCompleted
+    }
+    public mutating func confirmName() { nameConfirmed = true }
+    public mutating func observe(_ request: NikonControlRequest) {
+        if request.wantsTime { timeRequested = true; requestsAcknowledged = false }
+        if request.wantsConnection { connectionRequested = true; connectionConfirmed = false; requestsAcknowledged = false }
+    }
+    public mutating func confirmTime() { timeConfirmed = true }
+    public mutating func confirmConnection() { connectionConfirmed = true }
+    public mutating func confirmAcknowledgment() { requestsAcknowledged = true }
+    public func wakeCommand() throws -> Data {
+        guard ready else { throw ZoraError.unsupported("相机注册尚未完成，请先确认配对码并完成连接验证") }
+        return Data([1])
+    }
+}
+
+public enum NikonAdvertisement {
+    public static func controllerID(_ manufacturer: Data) -> UInt32? {
+        guard manufacturer.count >= 6, manufacturer.prefix(2) == Data([0x99,0x03]) else { return nil }
+        var reader = BinaryReader(Data(manufacturer.dropFirst(2))); return try? reader.integer(UInt32.self)
     }
 }
 
