@@ -1,11 +1,11 @@
 # Z7 II 相机通信可行性矩阵
 
-核对日期：2026-10-23，0.3.0。验证分为“官方产品功能证据”“代码已实现”“本环境自动测试”“Z7 II 真机验证”；它们不能互相替代。USB/扩展协议详表见 USB_AND_PUBLIC_PROTOCOLS.md。
+核对日期：2026-10-28，0.4.0。验证分为“官方产品功能证据”“代码已实现”“本环境自动测试”“Z7 II 真机验证”；它们不能互相替代。USB/扩展协议详表见 USB_AND_PUBLIC_PROTOCOLS.md，首配注册与恢复修复见 PAIRING_FLOW_REPAIR.md。
 
 | 能力 | 公开证据与路线 | 工程实现 | 真机状态 / 边界 |
 |---|---|---|---|
 | Wi-Fi 遥控、实时取景 | Nikon Z7 II 手册及 SnapBridge 文档确认产品能力 | NWConnection TCP，PTP/IP 双通道，Nikon 0x9201/02/03 实验调用 | 未验证第三方协议兼容；产品功能存在不等于通用协议可访问 |
-| 蓝牙认证/唤醒 | CoreBluetooth + DE00/2000/2002/2005 | 真实四阶段认证、保存身份、Wi-Fi 唤醒、自动重连 | 字节级向量已通过；Z7 II 系统绑定和固件方言仍需真机验证，见 BLUETOOTH_AND_WAKE.md |
+| 蓝牙认证/注册/唤醒 | CoreBluetooth + DE00/2000/2002/2005/2006/2008 | 四阶段认证后继续注册、校时/连接请求应答、系统配对释放与重认证、完整验证后允许 Wi-Fi | 核心状态/真实命令顺序测试通过；Z7 II 系统绑定、机身完成提示和固件方言仍需真机验证，见 PAIRING_FLOW_REPAIR.md |
 | 加入相机热点 | NEHotspotConfiguration 公共 API | 输入 SSID/密码，系统批准，joinOnce | 需 Apple 签名 entitlement 与真机；不推断热点参数 |
 | PTP/IP 初始化 | 独立编码；参考 libgphoto2 公共实现的协议字段 | GUID、UTF16 名称、15740 可见默认端口、命令/事件 ACK、Ping/Pong | Z7 II 模式、配对、握手差异待查；拒绝立即失败 |
 | 能力读取 | GetDeviceInfo 0x1001 | 读取厂商、固件、操作集与属性集后开放控件 | 声明支持仍不等于当前拍摄模式允许执行 |

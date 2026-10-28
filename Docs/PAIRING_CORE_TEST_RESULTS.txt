@@ -1,0 +1,172 @@
+ZORA 0.4.0 core XCTest cloud evidence
+Source: 0047a30747466e27f09bdb3b9ae004148ead832a
+Run: https://github.com/lbh5240/PhotoLocationMap-source-for-github/actions/runs/40697335292
+Explicit fixtures; not physical Nikon/iPhone/NAS validation.
+
+2026-10-28T13:33:50.5645030Z Test Suite 'All tests' started at 2026-10-28 13:33:49.723.
+2026-10-28T13:33:50.5648560Z Test Suite 'ZoraCoreTests.xctest' started at 2026-10-28 13:33:49.728.
+2026-10-28T13:33:50.5649790Z Test Suite 'ImagingTests' started at 2026-10-28 13:33:49.728.
+2026-10-28T13:33:50.5651370Z Test Case '-[ZoraCoreTests.ImagingTests testIdentityCubeAndInvalidRows]' started.
+2026-10-28T13:33:50.5652140Z Test Case '-[ZoraCoreTests.ImagingTests testIdentityCubeAndInvalidRows]' passed (0.005 seconds).
+2026-10-28T13:33:50.5652860Z Test Case '-[ZoraCoreTests.ImagingTests testMonitorHistogramAndClipping]' started.
+2026-10-28T13:33:50.5653560Z Test Case '-[ZoraCoreTests.ImagingTests testMonitorHistogramAndClipping]' passed (0.001 seconds).
+2026-10-28T13:33:50.5654160Z Test Case '-[ZoraCoreTests.ImagingTests testPeakingFindsAnEdge]' started.
+2026-10-28T13:33:50.5656110Z Test Case '-[ZoraCoreTests.ImagingTests testPeakingFindsAnEdge]' passed (0.001 seconds).
+2026-10-28T13:33:50.5656770Z Test Case '-[ZoraCoreTests.ImagingTests testRecipeValidation]' started.
+2026-10-28T13:33:50.5657390Z Test Case '-[ZoraCoreTests.ImagingTests testRecipeValidation]' passed (0.000 seconds).
+2026-10-28T13:33:50.5658130Z Test Suite 'ImagingTests' passed at 2026-10-28 13:33:49.737.
+2026-10-28T13:33:50.5664280Z 	 Executed 4 tests, with 0 failures (0 unexpected) in 0.007 (0.009) seconds
+2026-10-28T13:33:50.5664970Z Test Suite 'NikonBluetoothTests' started at 2026-10-28 13:33:49.737.
+2026-10-28T13:33:50.5665710Z Test Case '-[ZoraCoreTests.NikonBluetoothTests testClientNameIsFixedASCIIAndRejectsOverflow]' started.
+2026-10-28T13:33:50.5666550Z Test Case '-[ZoraCoreTests.NikonBluetoothTests testClientNameIsFixedASCIIAndRejectsOverflow]' passed (0.001 seconds).
+2026-10-28T13:33:50.5682030Z Test Case '-[ZoraCoreTests.NikonBluetoothTests testLittleEndianFrameRoundTripPreservesUInt64]' started.
+2026-10-28T13:33:50.5687840Z Test Case '-[ZoraCoreTests.NikonBluetoothTests testLittleEndianFrameRoundTripPreservesUInt64]' passed (0.000 seconds).
+2026-10-28T13:33:50.5688970Z Test Case '-[ZoraCoreTests.NikonBluetoothTests testNewIdentityAndReconnectUseFreshChallenge]' started.
+2026-10-28T13:33:50.5689930Z Test Case '-[ZoraCoreTests.NikonBluetoothTests testNewIdentityAndReconnectUseFreshChallenge]' passed (0.002 seconds).
+2026-10-28T13:33:50.5690930Z Test Case '-[ZoraCoreTests.NikonBluetoothTests testOutOfOrderAndMalformedFramesRejected]' started.
+2026-10-28T13:33:50.5691920Z Test Case '-[ZoraCoreTests.NikonBluetoothTests testOutOfOrderAndMalformedFramesRejected]' passed (0.003 seconds).
+2026-10-28T13:33:50.5692760Z Test Case '-[ZoraCoreTests.NikonBluetoothTests testPublishedZ50IIChallengeVectorNotZ7IIHardwareTest]' started.
+2026-10-28T13:33:50.5693760Z Test Case '-[ZoraCoreTests.NikonBluetoothTests testPublishedZ50IIChallengeVectorNotZ7IIHardwareTest]' passed (0.003 seconds).
+2026-10-28T13:33:50.5694600Z Test Case '-[ZoraCoreTests.NikonBluetoothTests testReconnectIsBoundedAndBacksOff]' started.
+2026-10-28T13:33:50.5695520Z Test Case '-[ZoraCoreTests.NikonBluetoothTests testReconnectIsBoundedAndBacksOff]' passed (0.000 seconds).
+2026-10-28T13:33:50.5696410Z Test Case '-[ZoraCoreTests.NikonBluetoothTests testStandardBlowfishKnownAnswer]' started.
+2026-10-28T13:33:50.5697550Z Test Case '-[ZoraCoreTests.NikonBluetoothTests testStandardBlowfishKnownAnswer]' passed (0.003 seconds).
+2026-10-28T13:33:50.5698560Z Test Case '-[ZoraCoreTests.NikonBluetoothTests testTamperedChallengeNeverEnablesWake]' started.
+2026-10-28T13:33:50.5699830Z Test Case '-[ZoraCoreTests.NikonBluetoothTests testTamperedChallengeNeverEnablesWake]' passed (0.003 seconds).
+2026-10-28T13:33:50.5701010Z Test Case '-[ZoraCoreTests.NikonBluetoothTests testTimePayloadHandlesNegativeFractionalTimezone]' started.
+2026-10-28T13:33:50.5701850Z Test Case '-[ZoraCoreTests.NikonBluetoothTests testTimePayloadHandlesNegativeFractionalTimezone]' passed (0.001 seconds).
+2026-10-28T13:33:50.5702710Z Test Suite 'NikonBluetoothTests' passed at 2026-10-28 13:33:49.756.
+2026-10-28T13:33:50.5703190Z 	 Executed 9 tests, with 0 failures (0 unexpected) in 0.017 (0.019) seconds
+2026-10-28T13:33:50.5703760Z Test Suite 'PairingWorkflowTests' started at 2026-10-28 13:33:49.756.
+2026-10-28T13:33:50.5704510Z Test Case '-[ZoraCoreTests.PairingWorkflowTests testActualRegistrationExchangeWritesClockThenAckThenBTEstablishment]' started.
+2026-10-28T13:33:50.5705440Z Test Case '-[ZoraCoreTests.PairingWorkflowTests testActualRegistrationExchangeWritesClockThenAckThenBTEstablishment]' passed (0.018 seconds).
+2026-10-28T13:33:50.5706450Z Test Case '-[ZoraCoreTests.PairingWorkflowTests testCancellationBeforeContinuationInstallResumesExactlyOnce]' started.
+2026-10-28T13:33:50.5707330Z Test Case '-[ZoraCoreTests.PairingWorkflowTests testCancellationBeforeContinuationInstallResumesExactlyOnce]' passed (0.001 seconds).
+2026-10-28T13:33:50.5708920Z Test Case '-[ZoraCoreTests.PairingWorkflowTests testCombinedControlRequestsKeepGPSAndReservedBits]' started.
+2026-10-28T13:33:50.5709810Z Test Case '-[ZoraCoreTests.PairingWorkflowTests testCombinedControlRequestsKeepGPSAndReservedBits]' passed (0.000 seconds).
+2026-10-28T13:33:50.5710930Z Test Case '-[ZoraCoreTests.PairingWorkflowTests testConcurrentCallbacksDeliverExactlyOneResult]' started.
+2026-10-28T13:33:50.5712190Z Test Case '-[ZoraCoreTests.PairingWorkflowTests testConcurrentCallbacksDeliverExactlyOneResult]' passed (0.001 seconds).
+2026-10-28T13:33:50.5713060Z Test Case '-[ZoraCoreTests.PairingWorkflowTests testConnectionOnlyRequestIsNotIgnoredAfterPairingCodeConfirmation]' started.
+2026-10-28T13:33:50.5714080Z Test Case '-[ZoraCoreTests.PairingWorkflowTests testConnectionOnlyRequestIsNotIgnoredAfterPairingCodeConfirmation]' passed (0.001 seconds).
+2026-10-28T13:33:50.5715150Z Test Case '-[ZoraCoreTests.PairingWorkflowTests testConnectionThenTimeRequestCompletesRegistrationOnlyAfterAcknowledgments]' started.
+2026-10-28T13:33:50.5716320Z Test Case '-[ZoraCoreTests.PairingWorkflowTests testConnectionThenTimeRequestCompletesRegistrationOnlyAfterAcknowledgments]' passed (0.000 seconds).
+2026-10-28T13:33:50.5717250Z Test Case '-[ZoraCoreTests.PairingWorkflowTests testFailedAckNeverSendsEstablishmentOrUnlocksWake]' started.
+2026-10-28T13:33:50.5718030Z Test Case '-[ZoraCoreTests.PairingWorkflowTests testFailedAckNeverSendsEstablishmentOrUnlocksWake]' passed (0.000 seconds).
+2026-10-28T13:33:50.5718970Z Test Case '-[ZoraCoreTests.PairingWorkflowTests testGPSRequestWithoutLocationPermissionCausesNoWrites]' started.
+2026-10-28T13:33:50.5719990Z Test Case '-[ZoraCoreTests.PairingWorkflowTests testGPSRequestWithoutLocationPermissionCausesNoWrites]' passed (0.001 seconds).
+2026-10-28T13:33:50.5720990Z Test Case '-[ZoraCoreTests.PairingWorkflowTests testLegacyIdentityMigratesAsUnverifiedWithoutChangingNonce]' started.
+2026-10-28T13:33:50.5721940Z Test Case '-[ZoraCoreTests.PairingWorkflowTests testLegacyIdentityMigratesAsUnverifiedWithoutChangingNonce]' passed (0.001 seconds).
+2026-10-28T13:33:50.5722800Z Test Case '-[ZoraCoreTests.PairingWorkflowTests testNameAndClockWriteAloneDoNotCompleteNewRegistration]' started.
+2026-10-28T13:33:50.5724370Z Test Case '-[ZoraCoreTests.PairingWorkflowTests testNameAndClockWriteAloneDoNotCompleteNewRegistration]' passed (0.000 seconds).
+2026-10-28T13:33:50.5725340Z Test Case '-[ZoraCoreTests.PairingWorkflowTests testNamelessReconnectAdvertisementMatchesOnlySavedController]' started.
+2026-10-28T13:33:50.5726470Z Test Case '-[ZoraCoreTests.PairingWorkflowTests testNamelessReconnectAdvertisementMatchesOnlySavedController]' passed (0.000 seconds).
+2026-10-28T13:33:50.5727410Z Test Case '-[ZoraCoreTests.PairingWorkflowTests testRepeatConnectionRequestRevokesReadinessUntilServiced]' started.
+2026-10-28T13:33:50.5728310Z Test Case '-[ZoraCoreTests.PairingWorkflowTests testRepeatConnectionRequestRevokesReadinessUntilServiced]' passed (0.000 seconds).
+2026-10-28T13:33:50.5729090Z Test Case '-[ZoraCoreTests.PairingWorkflowTests testSystemPairingStillRequiresLiveRegistrationIO]' started.
+2026-10-28T13:33:50.5730550Z Test Case '-[ZoraCoreTests.PairingWorkflowTests testSystemPairingStillRequiresLiveRegistrationIO]' passed (0.000 seconds).
+2026-10-28T13:33:50.5732230Z Test Case '-[ZoraCoreTests.PairingWorkflowTests testUnknownControlValuesAreNotGuessedOrCleared]' started.
+2026-10-28T13:33:50.5733520Z Test Case '-[ZoraCoreTests.PairingWorkflowTests testUnknownControlValuesAreNotGuessedOrCleared]' passed (0.000 seconds).
+2026-10-28T13:33:50.5734640Z Test Case '-[ZoraCoreTests.PairingWorkflowTests testVerifiedReconnectAlsoRequiresNewClockAndControlAcknowledgments]' started.
+2026-10-28T13:33:50.5735680Z Test Case '-[ZoraCoreTests.PairingWorkflowTests testVerifiedReconnectAlsoRequiresNewClockAndControlAcknowledgments]' passed (0.000 seconds).
+2026-10-28T13:33:50.5736590Z Test Suite 'PairingWorkflowTests' passed at 2026-10-28 13:33:49.784.
+2026-10-28T13:33:50.5737740Z 	 Executed 15 tests, with 0 failures (0 unexpected) in 0.025 (0.028) seconds
+2026-10-28T13:33:50.5738930Z Test Suite 'PipelineTests' started at 2026-10-28 13:33:49.784.
+2026-10-28T13:33:50.5739800Z Test Case '-[ZoraCoreTests.PipelineTests testImportOfflineRestartUploadThroughActualHTTPTransportWithExplicitURLProtocolFixture]' started.
+2026-10-28T13:33:50.5740960Z Test Case '-[ZoraCoreTests.PipelineTests testImportOfflineRestartUploadThroughActualHTTPTransportWithExplicitURLProtocolFixture]' passed (0.019 seconds).
+2026-10-28T13:33:50.5742100Z Test Suite 'PipelineTests' passed at 2026-10-28 13:33:49.803.
+2026-10-28T13:33:50.5742670Z 	 Executed 1 test, with 0 failures (0 unexpected) in 0.019 (0.019) seconds
+2026-10-28T13:33:50.5743150Z Test Suite 'ProtocolTests' started at 2026-10-28 13:33:49.803.
+2026-10-28T13:33:50.5743600Z Test Case '-[ZoraCoreTests.ProtocolTests testCompleteTransactionDataPhase]' started.
+2026-10-28T13:33:50.5744400Z Test Case '-[ZoraCoreTests.ProtocolTests testCompleteTransactionDataPhase]' passed (0.000 seconds).
+2026-10-28T13:33:50.5745060Z Test Case '-[ZoraCoreTests.ProtocolTests testDeviceInfoCapabilities]' started.
+2026-10-28T13:33:50.5745790Z Test Case '-[ZoraCoreTests.ProtocolTests testDeviceInfoCapabilities]' passed (0.001 seconds).
+2026-10-28T13:33:50.5746690Z Test Case '-[ZoraCoreTests.ProtocolTests testFramerEverySplitBoundaryAndCoalescing]' started.
+2026-10-28T13:33:50.5747570Z Test Case '-[ZoraCoreTests.ProtocolTests testFramerEverySplitBoundaryAndCoalescing]' passed (0.001 seconds).
+2026-10-28T13:33:50.5748440Z Test Case '-[ZoraCoreTests.ProtocolTests testFramerRejectsUnderflowAndOversize]' started.
+2026-10-28T13:33:50.5749260Z Test Case '-[ZoraCoreTests.ProtocolTests testFramerRejectsUnderflowAndOversize]' passed (0.000 seconds).
+2026-10-28T13:33:50.5750080Z Test Case '-[ZoraCoreTests.ProtocolTests testInitializationHasGUIDNameAndVersion]' started.
+2026-10-28T13:33:50.5750770Z Test Case '-[ZoraCoreTests.ProtocolTests testInitializationHasGUIDNameAndVersion]' passed (0.000 seconds).
+2026-10-28T13:33:50.5751620Z Test Case '-[ZoraCoreTests.ProtocolTests testLiveViewHeaderAndTruncation]' started.
+2026-10-28T13:33:50.5752260Z Test Case '-[ZoraCoreTests.ProtocolTests testLiveViewHeaderAndTruncation]' passed (0.002 seconds).
+2026-10-28T13:33:50.5753360Z Test Case '-[ZoraCoreTests.ProtocolTests testOperationWireVector]' started.
+2026-10-28T13:33:50.5754010Z Test Case '-[ZoraCoreTests.ProtocolTests testOperationWireVector]' passed (0.000 seconds).
+2026-10-28T13:33:50.5754710Z Test Case '-[ZoraCoreTests.ProtocolTests testReaderTruncationDoesNotCrash]' started.
+2026-10-28T13:33:50.5755570Z Test Case '-[ZoraCoreTests.ProtocolTests testReaderTruncationDoesNotCrash]' passed (0.000 seconds).
+2026-10-28T13:33:50.5756220Z Test Case '-[ZoraCoreTests.ProtocolTests testScalarPropertyEnumGatesWrites]' started.
+2026-10-28T13:33:50.5756990Z Test Case '-[ZoraCoreTests.ProtocolTests testScalarPropertyEnumGatesWrites]' passed (0.000 seconds).
+2026-10-28T13:33:50.5757630Z Test Case '-[ZoraCoreTests.ProtocolTests testTransactionRejectsWrongIDAndLength]' started.
+2026-10-28T13:33:50.5758590Z Test Case '-[ZoraCoreTests.ProtocolTests testTransactionRejectsWrongIDAndLength]' passed (0.000 seconds).
+2026-10-28T13:33:50.5759460Z Test Suite 'ProtocolTests' passed at 2026-10-28 13:33:49.810.
+2026-10-28T13:33:50.5759920Z 	 Executed 10 tests, with 0 failures (0 unexpected) in 0.006 (0.007) seconds
+2026-10-28T13:33:50.5760570Z Test Suite 'SessionTests' started at 2026-10-28 13:33:49.810.
+2026-10-28T13:33:50.5761200Z Test Case '-[ZoraCoreTests.SessionTests testCameraErrorPreservesSessionButOversizedTransferClosesIt]' started.
+2026-10-28T13:33:50.5762130Z Test Case '-[ZoraCoreTests.SessionTests testCameraErrorPreservesSessionButOversizedTransferClosesIt]' passed (0.001 seconds).
+2026-10-28T13:33:50.5762920Z Test Case '-[ZoraCoreTests.SessionTests testRealSessionPipelineOverExplicitProtocolFixture]' started.
+2026-10-28T13:33:50.5763970Z Test Case '-[ZoraCoreTests.SessionTests testRealSessionPipelineOverExplicitProtocolFixture]' passed (0.001 seconds).
+2026-10-28T13:33:50.5765420Z Test Case '-[ZoraCoreTests.SessionTests testRejectedHandshakeNeverConnects]' started.
+2026-10-28T13:33:50.5766100Z Test Case '-[ZoraCoreTests.SessionTests testRejectedHandshakeNeverConnects]' passed (0.000 seconds).
+2026-10-28T13:33:50.5766920Z Test Case '-[ZoraCoreTests.SessionTests testUnsupportedOperationSendsNothing]' started.
+2026-10-28T13:33:50.5767570Z Test Case '-[ZoraCoreTests.SessionTests testUnsupportedOperationSendsNothing]' passed (0.001 seconds).
+2026-10-28T13:33:50.5768520Z Test Suite 'SessionTests' passed at 2026-10-28 13:33:49.814.
+2026-10-28T13:33:50.5769070Z 	 Executed 4 tests, with 0 failures (0 unexpected) in 0.003 (0.003) seconds
+2026-10-28T13:33:50.5769520Z Test Suite 'StorageTests' started at 2026-10-28 13:33:49.814.
+2026-10-28T13:33:50.5770520Z Test Case '-[ZoraCoreTests.StorageTests testCorruptQueueIsNotSilentlyDiscarded]' started.
+2026-10-28T13:33:50.5774920Z Test Case '-[ZoraCoreTests.StorageTests testCorruptQueueIsNotSilentlyDiscarded]' passed (0.002 seconds).
+2026-10-28T13:33:50.5776860Z Test Case '-[ZoraCoreTests.StorageTests testCrashRecoveryOfUploadingJob]' started.
+2026-10-28T13:33:50.5778360Z Test Case '-[ZoraCoreTests.StorageTests testCrashRecoveryOfUploadingJob]' passed (0.002 seconds).
+2026-10-28T13:33:50.5779100Z Test Case '-[ZoraCoreTests.StorageTests testHMACRFC4231]' started.
+2026-10-28T13:33:50.5780630Z Test Case '-[ZoraCoreTests.StorageTests testHMACRFC4231]' passed (0.001 seconds).
+2026-10-28T13:33:50.5782540Z Test Case '-[ZoraCoreTests.StorageTests testHTTPUploadAgainstOptInLocalTLSFixture]' started.
+2026-10-28T13:33:50.5785740Z /Users/runner/work/PhotoLocationMap-source-for-github/PhotoLocationMap-source-for-github/Tests/ZoraCoreTests/StorageTests.swift:97: -[ZoraCoreTests.StorageTests testHTTPUploadAgainstOptInLocalTLSFixture] : Test skipped - Set ZORA_TEST_HTTPS to local trusted TLS fixture URL
+2026-10-28T13:33:50.5791610Z Test Case '-[ZoraCoreTests.StorageTests testHTTPUploadAgainstOptInLocalTLSFixture]' skipped (0.001 seconds).
+2026-10-28T13:33:50.5795320Z Test Case '-[ZoraCoreTests.StorageTests testLibraryImportPreservesRAWAndPersistsRecipe]' started.
+2026-10-28T13:33:50.5797070Z Test Case '-[ZoraCoreTests.StorageTests testLibraryImportPreservesRAWAndPersistsRecipe]' passed (0.004 seconds).
+2026-10-28T13:33:50.5799520Z Test Case '-[ZoraCoreTests.StorageTests testOfflineQueueRestartsDeduplicatesAndCompletes]' started.
+2026-10-28T13:33:50.5801030Z Test Case '-[ZoraCoreTests.StorageTests testOfflineQueueRestartsDeduplicatesAndCompletes]' passed (0.004 seconds).
+2026-10-28T13:33:50.5802510Z Test Case '-[ZoraCoreTests.StorageTests testS3CanonicalPathEncodesReservedCharacters]' started.
+2026-10-28T13:33:50.5805600Z Test Case '-[ZoraCoreTests.StorageTests testS3CanonicalPathEncodesReservedCharacters]' passed (0.003 seconds).
+2026-10-28T13:33:50.5807890Z Test Case '-[ZoraCoreTests.StorageTests testS3SigningFixedVector]' started.
+2026-10-28T13:33:50.5810040Z Test Case '-[ZoraCoreTests.StorageTests testS3SigningFixedVector]' passed (0.004 seconds).
+2026-10-28T13:33:50.5810630Z Test Case '-[ZoraCoreTests.StorageTests testSHA256PublishedVectors]' started.
+2026-10-28T13:33:50.5811290Z Test Case '-[ZoraCoreTests.StorageTests testSHA256PublishedVectors]' passed (0.604 seconds).
+2026-10-28T13:33:50.5812080Z Test Case '-[ZoraCoreTests.StorageTests testTargetEncodesUnicodeAndRejectsHTTPTraversal]' started.
+2026-10-28T13:33:50.5812780Z Test Case '-[ZoraCoreTests.StorageTests testTargetEncodesUnicodeAndRejectsHTTPTraversal]' passed (0.001 seconds).
+2026-10-28T13:33:50.5813570Z Test Case '-[ZoraCoreTests.StorageTests testTransientFailureBackoffAndPermanentAuthFailure]' started.
+2026-10-28T13:33:50.5814540Z Test Case '-[ZoraCoreTests.StorageTests testTransientFailureBackoffAndPermanentAuthFailure]' passed (0.006 seconds).
+2026-10-28T13:33:50.5815250Z Test Suite 'StorageTests' passed at 2026-10-28 13:33:50.451.
+2026-10-28T13:33:50.5815750Z 	 Executed 11 tests, with 1 test skipped and 0 failures (0 unexpected) in 0.634 (0.637) seconds
+2026-10-28T13:33:50.5817730Z Test Suite 'USBAndControlTests' started at 2026-10-28 13:33:50.451.
+2026-10-28T13:33:50.5819510Z Test Case '-[ZoraCoreTests.USBAndControlTests testFailedDeviceInformationNeverMarksUSBConnected]' started.
+2026-10-28T13:33:50.5821590Z Test Case '-[ZoraCoreTests.USBAndControlTests testFailedDeviceInformationNeverMarksUSBConnected]' passed (0.001 seconds).
+2026-10-28T13:33:50.5823510Z Test Case '-[ZoraCoreTests.USBAndControlTests testFocusLimitsAndEndOfTravelAreNotFalseSuccess]' started.
+2026-10-28T13:33:50.5824900Z Test Case '-[ZoraCoreTests.USBAndControlTests testFocusLimitsAndEndOfTravelAreNotFalseSuccess]' passed (0.001 seconds).
+2026-10-28T13:33:50.5826260Z Test Case '-[ZoraCoreTests.USBAndControlTests testNikonCaptureMovieAndManualFocusUseDocumentedParameters]' started.
+2026-10-28T13:33:50.5827090Z Test Case '-[ZoraCoreTests.USBAndControlTests testNikonCaptureMovieAndManualFocusUseDocumentedParameters]' passed (0.001 seconds).
+2026-10-28T13:33:50.5828020Z Test Case '-[ZoraCoreTests.USBAndControlTests testPausingMonitorDoesNotIssueDuplicateLiveViewStart]' started.
+2026-10-28T13:33:50.5828860Z Test Case '-[ZoraCoreTests.USBAndControlTests testPausingMonitorDoesNotIssueDuplicateLiveViewStart]' passed (0.001 seconds).
+2026-10-28T13:33:50.5830980Z Test Case '-[ZoraCoreTests.USBAndControlTests testRAWLargerThan64MiBUsesBoundedChunksAndCommitsWholeFile]' started.
+2026-10-28T13:33:50.5831880Z Test Case '-[ZoraCoreTests.USBAndControlTests testRAWLargerThan64MiBUsesBoundedChunksAndCommitsWholeFile]' passed (0.071 seconds).
+2026-10-28T13:33:50.5832770Z Test Case '-[ZoraCoreTests.USBAndControlTests testRemoteControlIsReleasedBeforeSystemSessionCloses]' started.
+2026-10-28T13:33:50.5833590Z Test Case '-[ZoraCoreTests.USBAndControlTests testRemoteControlIsReleasedBeforeSystemSessionCloses]' passed (0.001 seconds).
+2026-10-28T13:33:50.5834580Z Test Case '-[ZoraCoreTests.USBAndControlTests testStorageAndDirectoryPagingDoNotTruncateAfter200]' started.
+2026-10-28T13:33:50.5835500Z Test Case '-[ZoraCoreTests.USBAndControlTests testStorageAndDirectoryPagingDoNotTruncateAfter200]' passed (0.003 seconds).
+2026-10-28T13:33:50.5836410Z Test Case '-[ZoraCoreTests.USBAndControlTests testSystemManagedSessionDoesNotSendFakeOpenOrCloseCommands]' started.
+2026-10-28T13:33:50.5837320Z Test Case '-[ZoraCoreTests.USBAndControlTests testSystemManagedSessionDoesNotSendFakeOpenOrCloseCommands]' passed (0.001 seconds).
+2026-10-28T13:33:50.5838080Z Test Case '-[ZoraCoreTests.USBAndControlTests testUnsupportedVideoOperationSendsNothing]' started.
+2026-10-28T13:33:50.5838970Z Test Case '-[ZoraCoreTests.USBAndControlTests testUnsupportedVideoOperationSendsNothing]' passed (0.001 seconds).
+2026-10-28T13:33:50.5840570Z Test Case '-[ZoraCoreTests.USBAndControlTests testUSBAndIPEventsHaveSameSemantics]' started.
+2026-10-28T13:33:50.5842960Z Test Case '-[ZoraCoreTests.USBAndControlTests testUSBAndIPEventsHaveSameSemantics]' passed (0.000 seconds).
+2026-10-28T13:33:50.5844860Z Test Case '-[ZoraCoreTests.USBAndControlTests testUSBCommandWireVectorAndParameterLimit]' started.
+2026-10-28T13:33:50.5846810Z Test Case '-[ZoraCoreTests.USBAndControlTests testUSBCommandWireVectorAndParameterLimit]' passed (0.000 seconds).
+2026-10-28T13:33:50.5848700Z Test Case '-[ZoraCoreTests.USBAndControlTests testUSBRemovalClearsVerifiedSession]' started.
+2026-10-28T13:33:50.5858280Z Test Case '-[ZoraCoreTests.USBAndControlTests testUSBRemovalClearsVerifiedSession]' passed (0.028 seconds).
+2026-10-28T13:33:50.5859440Z Test Case '-[ZoraCoreTests.USBAndControlTests testUSBResponseChecksHeaderErrorAndOptionalDaemonTransaction]' started.
+2026-10-28T13:33:50.5860510Z Test Case '-[ZoraCoreTests.USBAndControlTests testUSBResponseChecksHeaderErrorAndOptionalDaemonTransaction]' passed (0.000 seconds).
+2026-10-28T13:33:50.7510100Z Test Case '-[ZoraCoreTests.USBAndControlTests testWrongChunkLengthNeverPublishesPartialFile]' started.
+2026-10-28T13:33:50.7528740Z Test Case '-[ZoraCoreTests.USBAndControlTests testWrongChunkLengthNeverPublishesPartialFile]' passed (0.002 seconds).
+2026-10-28T13:33:50.7531980Z Test Suite 'USBAndControlTests' passed at 2026-10-28 13:33:50.566.
+2026-10-28T13:33:50.7636800Z 	 Executed 14 tests, with 0 failures (0 unexpected) in 0.112 (0.115) seconds
+2026-10-28T13:33:50.7638940Z Test Suite 'ZoraCoreTests.xctest' passed at 2026-10-28 13:33:50.566.
+2026-10-28T13:33:50.7782790Z 	 Executed 68 tests, with 1 test skipped and 0 failures (0 unexpected) in 0.822 (0.838) seconds
+2026-10-28T13:33:50.7797190Z Test Suite 'All tests' passed at 2026-10-28 13:33:50.566.
+2026-10-28T13:33:50.7802360Z 	 Executed 68 tests, with 1 test skipped and 0 failures (0 unexpected) in 0.822 (0.843) seconds

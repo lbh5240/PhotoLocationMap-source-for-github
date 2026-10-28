@@ -2,6 +2,24 @@
 
 # 架构与数据流程
 
+0.4 更新：BLE 链路、Nikon 身份认证、系统配对与相机注册分开；只有完整注册后才执行自动 Wi-Fi 连接。身份跨失败保留；生产注册状态与应答执行器在 ZoraCore，可使用记录型传输单独测试。具体修复见 PAIRING_FLOW_REPAIR.md。
+
+```mermaid
+flowchart TD
+    Scan[发现 Nikon] --> Link[建立 BLE 链路]
+    Link --> Auth[四阶段身份认证并保存暂存身份]
+    Auth --> Register[名称确认和校时及连接请求应答]
+    Register -->|首次注册仍未完成| Release[释放 BLE]
+    Release --> Picker[iOS 系统配对并确认码]
+    Picker --> Reauth[复用原身份重新认证]
+    Reauth --> Register
+    Register -->|满足注册门禁| Verified[标记本次完整验证]
+    Verified --> Wake[2005 写入 01 唤醒 Wi-Fi]
+    Wake --> Hotspot[系统加入热点]
+    Hotspot --> PTP[真实 PTP 握手和设备信息及会话]
+    Register -->|拒绝或超时| Retry[保留身份并手动续配]
+```
+
 ## 分层
 
 `ZoraCore` 是 Swift 6 包：协议编解码、`CameraSession` actor、属性/对象解析、`AssetLibrary` actor、`UploadQueue` actor、纯 Swift SHA256/HMAC/SigV4、Recipe/LUT/监看分析。只依赖 Foundation；Windows/Linux 可测试。
@@ -13,6 +31,9 @@ flowchart LR
     UI[SwiftUI 五个页面] --> Model[MainActor AppModel]
     Model --> Session[CameraSession actor]
     Session --> Transport[PTPPacketTransport]
+    Session --> Direct[PTPDirectTransport]
+    Direct --> USB[ImageCaptureCore 系统 USB 会话]
+    USB --> Camera
     Transport --> TCP[Network.framework 双 TCP]
     TCP --> Camera[Nikon Z7 II / 待验证]
     Model --> Library[AssetLibrary actor]

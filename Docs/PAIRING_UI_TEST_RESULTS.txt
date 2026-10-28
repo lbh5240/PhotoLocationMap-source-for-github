@@ -1,0 +1,143 @@
+ZORA 0.4.0 native UI XCTest evidence
+Source: 0047a30747466e27f09bdb3b9ae004148ead832a
+Run (attempt 2): https://github.com/lbh5240/PhotoLocationMap-source-for-github/actions/runs/40697335292/attempts/2
+Job: 122852544467
+Attempt 1 timed out in simulator bootstatus before UI tests. Attempt 2 completed normally.
+Simulator UI only; no physical Nikon/iPhone interoperability tested.
+
+2026-10-28T13:47:08.5047590Z Test Suite 'All tests' started at 2026-10-28 13:47:08.271.
+2026-10-28T13:47:08.5661900Z Test Suite 'ZORACameraUITests.xctest' started at 2026-10-28 13:47:08.275.
+2026-10-28T13:47:08.5855920Z Test Suite 'ZORACameraUITests' started at 2026-10-28 13:47:08.275.
+2026-10-28T13:47:08.5961360Z Test Case '-[ZORACameraUITests.ZORACameraUITests testDisconnectedCameraDoesNotPresentFakeLiveView]' started.
+2026-10-28T13:47:08.6325590Z     t =     0.01s Start Test at 2026-10-28 13:47:08.283
+2026-10-28T13:47:09.4232570Z     t =     1.02s Set Up
+2026-10-28T13:47:09.4679240Z     t =     1.03s Open app.zora.camera
+2026-10-28T13:47:09.4902430Z     t =     1.03s     Launch app.zora.camera
+2026-10-28T13:47:11.3283860Z 2026-10-28 13:47:11.326 xcodebuild[8628:29815] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-10-28T13:47:11.3385350Z 2026-10-28 13:47:11.328 xcodebuild[8628:29815] [MT] IDELaunchParametersSnapshot: no debugger version
+2026-10-28T13:47:11.3390140Z objc[10943]: Class UIAccessibilityLoaderWebShared is implemented in both /private/var/run/com.apple.security.cryptexd/mnt/com.apple.iPhoneOS.SimulatorRuntime-v24.1.434.0.XXVpsw/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.0.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebKit.axbundle/WebKit (0x1059e8398) and /private/var/run/com.apple.security.cryptexd/mnt/com.apple.iPhoneOS.SimulatorRuntime-v24.1.434.0.XXVpsw/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.0.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebCore.axbundle/WebCore (0x106c78310). This may cause spurious casting failures and mysterious crashes. One of the duplicates must be removed or renamed.
+2026-10-28T13:47:11.3991810Z 2026-10-28 13:47:11.376 xcodebuild[8628:29815] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
+2026-10-28T13:47:12.6061750Z Resolve Package Graph
+2026-10-28T13:47:13.1007530Z 
+2026-10-28T13:47:15.8686190Z     t =     7.53s         Setting up automation session
+2026-10-28T13:47:21.7298310Z     t =    13.35s         Wait for app.zora.camera to idle
+2026-10-28T13:47:25.8622540Z     t =    17.58s Waiting 10.0s for "connectCamera" Button to exist
+2026-10-28T13:47:26.9026240Z     t =    18.62s     Checking `Expect predicate `existsNoRetry == 1` for object "connectCamera" Button`
+2026-10-28T13:47:26.9128530Z     t =    18.62s         Checking existence of `"connectCamera" Button`
+2026-10-28T13:47:27.1821410Z     t =    18.90s Checking existence of `"等待你的 Nikon Z7 II" StaticText`
+2026-10-28T13:47:27.2376620Z     t =    18.95s Find the "释放快门" Button
+2026-10-28T13:47:27.2797880Z     t =    19.00s Tap "connectCamera" Button
+2026-10-28T13:47:27.2922320Z     t =    19.00s     Wait for app.zora.camera to idle
+2026-10-28T13:47:27.3085340Z     t =    19.00s     Find the "connectCamera" Button
+2026-10-28T13:47:27.3403920Z     t =    19.06s     Check for interrupting elements affecting "connectCamera" Button
+2026-10-28T13:47:27.4474870Z     t =    19.17s     Synthesize event
+2026-10-28T13:47:28.0631600Z     t =    19.76s     Wait for app.zora.camera to idle
+2026-10-28T13:47:28.9972620Z     t =    20.67s Waiting 3.0s for "搜索 Nikon 相机" Button to exist
+2026-10-28T13:47:29.9833610Z     t =    21.70s     Checking `Expect predicate `existsNoRetry == 1` for object "搜索 Nikon 相机" Button`
+2026-10-28T13:47:29.9941750Z     t =    21.70s         Checking existence of `"搜索 Nikon 相机" Button`
+2026-10-28T13:47:30.1794140Z     t =    21.89s Checking existence of `"pairingSteps" Other`
+2026-10-28T13:47:30.2686070Z     t =    21.99s Checking existence of `"建立蓝牙链路" StaticText`
+2026-10-28T13:47:30.3708300Z     t =    22.09s Checking existence of `"Nikon 蓝牙认证完成" StaticText`
+2026-10-28T13:47:30.4596800Z     t =    22.17s Tear Down
+2026-10-28T13:47:30.7502300Z Test Case '-[ZORACameraUITests.ZORACameraUITests testDisconnectedCameraDoesNotPresentFakeLiveView]' passed (22.463 seconds).
+2026-10-28T13:47:30.7630870Z Test Case '-[ZORACameraUITests.ZORACameraUITests testLibraryAndLooksNavigation]' started.
+2026-10-28T13:47:30.7737680Z     t =     0.00s Start Test at 2026-10-28 13:47:30.748
+2026-10-28T13:47:30.8065160Z     t =     0.05s Set Up
+2026-10-28T13:47:30.8459190Z     t =     0.05s Open app.zora.camera
+2026-10-28T13:47:30.9523320Z 2026-10-28 13:47:30.945 xcodebuild[8628:29815] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
+2026-10-28T13:47:30.9524260Z     t =     0.06s     Launch app.zora.camera
+2026-10-28T13:47:30.9832260Z 2026-10-28 13:47:30.947 xcodebuild[8628:29815] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
+2026-10-28T13:47:30.9836740Z     t =     0.06s         Terminate app.zora.camera:11600
+2026-10-28T13:47:30.9838550Z 2026-10-28 13:47:30.955 xcodebuild[8628:29815] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
+2026-10-28T13:47:31.8205580Z Resolve Package Graph
+2026-10-28T13:47:31.8372840Z 
+2026-10-28T13:47:31.8897420Z 2026-10-28 13:47:31.889 xcodebuild[8628:29815] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-10-28T13:47:31.8898640Z 2026-10-28 13:47:31.889 xcodebuild[8628:29815] [MT] IDELaunchParametersSnapshot: no debugger version
+2026-10-28T13:47:31.9080120Z 2026-10-28 13:47:31.907 xcodebuild[8628:29815] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
+2026-10-28T13:47:32.6787480Z     t =     1.86s         Setting up automation session
+2026-10-28T13:47:38.4946250Z     t =     7.73s         Wait for app.zora.camera to idle
+2026-10-28T13:47:40.6372630Z     t =     9.88s Tap "照片" Button
+2026-10-28T13:47:40.6472510Z     t =     9.88s     Wait for app.zora.camera to idle
+2026-10-28T13:47:40.6576490Z     t =     9.88s     Find the "照片" Button
+2026-10-28T13:47:40.8623470Z     t =    10.09s     Check for interrupting elements affecting "照片" Button
+2026-10-28T13:47:40.9072900Z     t =    10.15s     Synthesize event
+2026-10-28T13:47:41.2923910Z     t =    10.52s     Wait for app.zora.camera to idle
+2026-10-28T13:47:43.4997360Z     t =    12.75s Waiting 5.0s for "importPhotos" Button to exist
+2026-10-28T13:47:44.5592530Z     t =    13.81s     Checking `Expect predicate `existsNoRetry == 1` for object "importPhotos" Button`
+2026-10-28T13:47:44.5695910Z     t =    13.81s         Checking existence of `"importPhotos" Button`
+2026-10-28T13:47:44.6590620Z     t =    13.90s Tap "风格" Button
+2026-10-28T13:47:44.6690560Z     t =    13.90s     Wait for app.zora.camera to idle
+2026-10-28T13:47:44.6796440Z     t =    13.90s     Find the "风格" Button
+2026-10-28T13:47:44.7032840Z     t =    13.95s     Check for interrupting elements affecting "camera.filters" Button
+2026-10-28T13:47:44.7461750Z     t =    13.99s     Synthesize event
+2026-10-28T13:47:45.0593450Z     t =    14.29s     Wait for app.zora.camera to idle
+2026-10-28T13:47:47.0428570Z     t =    16.29s Waiting 5.0s for "琥珀日光" StaticText to exist
+2026-10-28T13:47:48.0971780Z     t =    17.34s     Checking `Expect predicate `existsNoRetry == 1` for object "琥珀日光" StaticText`
+2026-10-28T13:47:48.1077700Z     t =    17.34s         Checking existence of `"琥珀日光" StaticText`
+2026-10-28T13:47:48.2368590Z     t =    17.45s Tear Down
+2026-10-28T13:47:48.4783100Z Test Case '-[ZORACameraUITests.ZORACameraUITests testLibraryAndLooksNavigation]' passed (17.730 seconds).
+2026-10-28T13:47:48.4995970Z Test Case '-[ZORACameraUITests.ZORACameraUITests testUSBSimulatorNeverPretendsACameraIsConnected]' started.
+2026-10-28T13:47:48.5286470Z     t =     0.00s Start Test at 2026-10-28 13:47:48.480
+2026-10-28T13:47:48.5411440Z     t =     0.04s Set Up
+2026-10-28T13:47:48.7955870Z     t =     0.04s Open app.zora.camera
+2026-10-28T13:47:49.0340680Z 2026-10-28 13:47:48.802 xcodebuild[8628:29815] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
+2026-10-28T13:47:49.0589430Z     t =     0.05s     Launch app.zora.camera
+2026-10-28T13:47:49.0711440Z 2026-10-28 13:47:48.802 xcodebuild[8628:29815] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
+2026-10-28T13:47:49.0712150Z     t =     0.05s         Terminate app.zora.camera:12355
+2026-10-28T13:47:49.0863160Z 2026-10-28 13:47:49.072 xcodebuild[8628:29815] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
+2026-10-28T13:47:49.6214010Z 2026-10-28 13:47:49.620 xcodebuild[8628:29815] [MT] IDELaunchParametersSnapshot: debugger version lookup failed for path '<nil>': noURL
+2026-10-28T13:47:49.6416780Z 2026-10-28 13:47:49.621 xcodebuild[8628:29815] [MT] IDELaunchParametersSnapshot: no debugger version
+2026-10-28T13:47:49.7442750Z 2026-10-28 13:47:49.652 xcodebuild[8628:29815] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
+2026-10-28T13:47:50.2133480Z     t =     1.65s         Setting up automation session
+2026-10-28T13:47:50.3481610Z Resolve Package Graph
+2026-10-28T13:47:50.4131970Z 
+2026-10-28T13:47:54.3973300Z     t =     5.89s         Wait for app.zora.camera to idle
+2026-10-28T13:47:56.4394110Z     t =     7.96s Waiting 10.0s for "connectCamera" Button to exist
+2026-10-28T13:47:57.4645950Z     t =     8.97s     Checking `Expect predicate `existsNoRetry == 1` for object "connectCamera" Button`
+2026-10-28T13:47:57.4750220Z     t =     8.97s         Checking existence of `"connectCamera" Button`
+2026-10-28T13:47:57.6540020Z     t =     9.16s Tap "connectCamera" Button
+2026-10-28T13:47:57.6693860Z     t =     9.16s     Wait for app.zora.camera to idle
+2026-10-28T13:47:57.6794510Z     t =     9.17s     Find the "connectCamera" Button
+2026-10-28T13:47:57.7327310Z     t =     9.24s     Check for interrupting elements affecting "connectCamera" Button
+2026-10-28T13:47:57.7881410Z     t =     9.30s     Synthesize event
+2026-10-28T13:47:58.1452920Z     t =     9.66s     Wait for app.zora.camera to idle
+2026-10-28T13:47:58.4450500Z     t =     9.95s Tap "USB 有线" Button
+2026-10-28T13:47:58.4554830Z     t =     9.95s     Wait for app.zora.camera to idle
+2026-10-28T13:47:58.9853530Z     t =    10.48s     Find the "USB 有线" Button
+2026-10-28T13:47:59.2145030Z     t =    10.71s     Check for interrupting elements affecting "USB 有线" Button
+2026-10-28T13:47:59.2779790Z     t =    10.79s     Synthesize event
+2026-10-28T13:47:59.6659510Z     t =    11.10s     Wait for app.zora.camera to idle
+2026-10-28T13:48:01.1158820Z     t =    12.57s Tap "searchUSBCamera" Button
+2026-10-28T13:48:01.1293310Z     t =    12.57s     Wait for app.zora.camera to idle
+2026-10-28T13:48:01.1618420Z     t =    12.59s     Find the "searchUSBCamera" Button
+2026-10-28T13:48:01.2904400Z     t =    12.79s     Check for interrupting elements affecting "searchUSBCamera" Button
+2026-10-28T13:48:01.3937530Z     t =    12.90s     Synthesize event
+2026-10-28T13:48:01.7082980Z     t =    13.21s     Wait for app.zora.camera to idle
+2026-10-28T13:48:01.9396990Z     t =    13.46s Waiting 3.0s for "模拟器不能连接真实 USB 相机，请使用 iPhone / iPad" StaticText to exist
+2026-10-28T13:48:02.9811570Z     t =    14.49s     Checking `Expect predicate `existsNoRetry == 1` for object "模拟器不能连接真实 USB 相机，请使用 iPhone / iPad" StaticText`
+2026-10-28T13:48:02.9967450Z     t =    14.49s         Checking existence of `"模拟器不能连接真实 USB 相机，请使用 iPhone / iPad" StaticText`
+2026-10-28T13:48:03.0634880Z     t =    14.58s Checking existence of `"断开 USB 会话" Button`
+2026-10-28T13:48:03.1562860Z     t =    14.67s Tear Down
+2026-10-28T13:48:03.3794640Z Test Case '-[ZORACameraUITests.ZORACameraUITests testUSBSimulatorNeverPretendsACameraIsConnected]' passed (14.892 seconds).
+2026-10-28T13:48:03.3908720Z Test Suite 'ZORACameraUITests' passed at 2026-10-28 13:48:03.371.
+2026-10-28T13:48:03.4052420Z 	 Executed 3 tests, with 0 failures (0 unexpected) in 55.086 (55.097) seconds
+2026-10-28T13:48:03.5085090Z Test Suite 'ZORACameraUITests.xctest' passed at 2026-10-28 13:48:03.372.
+2026-10-28T13:48:03.5202920Z 2026-10-28 13:48:03.511 xcodebuild[8628:29815] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
+2026-10-28T13:48:03.5209080Z 	 Executed 3 tests, with 0 failures (0 unexpected) in 55.086 (55.097) seconds
+2026-10-28T13:48:03.5217940Z Test Suite 'All tests' passed at 2026-10-28 13:48:03.372.
+2026-10-28T13:48:03.7551750Z 2026-10-28 13:48:03.512 xcodebuild[8628:29815] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
+2026-10-28T13:48:03.7553070Z 	 Executed 3 tests, with 0 failures (0 unexpected) in 55.086 (55.101) seconds
+2026-10-28T13:48:03.7555060Z 2026-10-28 13:48:03.513 xcodebuild[8628:29815] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
+2026-10-28T13:48:03.8948200Z 2026-10-28 13:48:03.865 xcodebuild[8628:29815] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
+2026-10-28T13:48:03.8949030Z Resolve Package Graph
+2026-10-28T13:48:03.9080390Z 2026-10-28 13:48:03.865 xcodebuild[8628:29815] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
+2026-10-28T13:48:03.9234900Z 2026-10-28 13:48:03.865 xcodebuild[8628:29815] [MT] IDESchemeActionSDKRecord: operatingSystemBuild = <DVTBuildVersion 24A94232>, error = invalidDigitCount(94232).
+2026-10-28T13:48:03.9486640Z 
+2026-10-28T13:48:04.3272600Z 2026-10-28 13:48:04.327 xcodebuild[8628:29815] [MT] IDETestOperationsObserverDebug: 90.124 elapsed -- Testing started completed.
+2026-10-28T13:48:04.3516350Z 2026-10-28 13:48:04.327 xcodebuild[8628:29815] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-10-28T13:48:04.3517170Z 
+2026-10-28T13:48:04.3650400Z 2026-10-28 13:48:04.327 xcodebuild[8628:29815] [MT] IDETestOperationsObserverDebug: 90.124 sec, +90.124 sec -- end
+2026-10-28T13:48:04.3651180Z Test session results, code coverage, and logs:
+2026-10-28T13:48:04.3898970Z 	/Users/runner/work/PhotoLocationMap-source-for-github/PhotoLocationMap-source-for-github/TestResults/UI.xcresult
+2026-10-28T13:48:04.4001610Z 
+2026-10-28T13:48:04.4245200Z ** TEST SUCCEEDED **

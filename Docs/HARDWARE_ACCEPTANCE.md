@@ -5,7 +5,7 @@
 ## Xcode 与界面
 
 - [x] 用云端 Xcode 27 / iOS 27 SDK 完成 Debug 模拟器编译与 Release ARM64 真机归档；解决本次 SwiftUI/CoreImage 编译诊断。
-- [x] 核心测试（53 项：52 通过/1 跳过）与基础 UI 3 项通过；执行编号见 TEST_SUMMARY.md。
+- [x] 0.4 核心测试（68 项：67 通过/1 跳过）与基础 UI 3 项通过；同一最终提交的执行编号与重试记录见 TEST_SUMMARY.md。
 - [ ] Instruments 性能分析；真机 Xcode build、iOS build、机型和性能报告。
 - [ ] iPhone/iPad 竖横屏、最大动态字体、VoiceOver、Reduce Motion/Transparency、深浅环境对比、键盘避让。
 - [ ] 真机签名与 Hotspot Configuration entitlement；本地网络/蓝牙权限允许、拒绝、撤回路径。
@@ -14,7 +14,8 @@
 
 ## Z7 II
 
-- [ ] 执行 BLUETOOTH_AND_WAKE.md 的首配、系统绑定、重连、Wi-Fi 唤醒闭环；20 次成功率/延迟记录后才比较 SnapBridge。
+- [ ] 执行 PAIRING_FLOW_REPAIR.md 的旧身份续配、两端确认码、释放 BLE 后系统配对、同一身份重新认证、校时及连接请求闭环；相机与 App 两端均完成，再进入 Wi-Fi。记录每一步相机屏幕与诊断，不能只看 GATT 写响应。
+- [ ] 首配、重连、Wi-Fi 唤醒闭环重复 20 次，记录成功率/延迟后才比较 SnapBridge；系统选择器可见/取消/超时、前后台切换、无名称广播/临时 UUID 变化分别验证。
 - [ ] 校时/电量、手动断开与遗忘、拒绝网络许可、后台恢复及“关机时发送”各状态；不能由跨机型向量测试外推真机通过。
 
 - [ ] 按 CAMERA_FEASIBILITY 顺序验证；记录固件与网络模式，先只读，再属性，再快门，再 Live View。
