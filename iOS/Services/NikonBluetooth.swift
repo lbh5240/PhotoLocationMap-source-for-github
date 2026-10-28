@@ -27,13 +27,21 @@ import ZoraCore
     private var peripheral: CBPeripheral?
     private var characteristics: [CBUUID: CBCharacteristic] = [:]
     private var pending: [String: (UUID, CheckedContinuation<Data, Error>)] = [:]
-    private var frames: [Data] = [], controls: [Data] = []
+    private var frames: [Data] = []
+    private var controls: [Data] = []
     private var sessionToken = UUID()
     private var handshake: NikonBLEHandshake?
     private var registration = NikonBLERegistration()
-    private var scanTask: Task<Void, Never>?, pairingTask: Task<Void, Never>?, retryTask: Task<Void, Never>?, keepAlive: Task<Void, Never>?, controlTask: Task<Void, Never>?
+    private var scanTask: Task<Void, Never>?
+    private var pairingTask: Task<Void, Never>?
+    private var retryTask: Task<Void, Never>?
+    private var keepAlive: Task<Void, Never>?
+    private var controlTask: Task<Void, Never>?
     private var retryAttempt = 0
-    private var userDisconnected = false, foreground = true, resumeRequested = false, scanRequested = false
+    private var userDisconnected = false
+    private var foreground = true
+    private var resumeRequested = false
+    private var scanRequested = false
     private var pickerPresented = false
     private var systemPairingEvidenceForSerial: String?
     private var gattBusy = false
@@ -266,6 +274,12 @@ import ZoraCore
         }
     }
     func wakeWiFi() async throws {
+        guard state == .authenticated else { throw ZoraError.unsupported("相机配对注册尚未完成，不能提前切换到 Wi-Fi") }
+        drainControl()
+        for _ in 0..<100 where controlTask != nil || !controls.isEmpty {
+            try await Task.sleep(for: .milliseconds(100)); try Task.checkCancellation()
+        }
+        guard controlTask == nil, controls.isEmpty else { throw ZoraError.busy }
         guard authenticated else { throw ZoraError.unsupported("相机配对注册尚未完成，不能提前切换到 Wi-Fi") }
         try await write(registration.wakeCommand(), to: Self.wake)
         status = "相机接受 Wi-Fi 唤醒写入 · 等待热点与 PTP 验证"; log(status)
@@ -291,7 +305,7 @@ import ZoraCore
         pairingTask?.cancel(); controlTask?.cancel(); controlTask = nil; retryTask?.cancel(); scanTask?.cancel(); keepAlive?.cancel(); central?.stopScan()
         if let p = peripheral { central?.cancelPeripheralConnection(p) }; peripheral = nil; clear(ZoraError.disconnected)
         phase(.disconnected, 0, "蓝牙已断开；未完成的相机身份保留，可继续配对")
-        if forget { Keychain.delete(id: "nikon.ble.identity"); Keychain.delete(id: "nikon.wifi"); identity = nil; status = "本机资料已移除；系统绑定请在 iPhone 蓝牙设置中忽略设备" }
+        if forget { Keychain.delete(id: "nikon.ble.identity"); Keychain.delete(id: "nikon.wifi"); identity = nil; systemPairingEvidenceForSerial = nil; status = "本机资料已移除；系统绑定请在 iPhone 蓝牙设置中忽略设备" }
     }
     private func clear(_ error: Error) {
         let values = pending.values.map { $0.1 }; pending.removeAll(); for c in values { c.resume(throwing: error) }
