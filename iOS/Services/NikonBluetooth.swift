@@ -330,7 +330,10 @@ import ZoraCore
         guard let identity, central?.state == .poweredOn, !working, !authenticated, !userDisconnected, !pickerPresented else { return }
         begin(identity.peripheralID, forceSystemPairing: false)
     }
-    func retrySaved() { userDisconnected = false; retryAttempt = 0; resumeRequested = true; if manager().state == .poweredOn { reconnectSaved() } }
+    func retrySaved() {
+        userDisconnected = false; retryAttempt = 0; resumeRequested = true
+        if manager().state == .poweredOn, let identity { begin(identity.peripheralID, forceSystemPairing: false) }
+    }
     func showSystemPairing() {
         guard identity != nil else { status = "请先扫描并选择相机，完成 Nikon 身份握手"; return }
         guard !working, !pickerPresented else { status = "请先完成或取消当前配对步骤"; return }
