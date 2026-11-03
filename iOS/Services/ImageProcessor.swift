@@ -21,9 +21,33 @@ actor ImageProcessor {
         let controls = CIFilter.colorControls(); controls.inputImage = exposure.outputImage
         controls.contrast = Float(recipe.contrast); controls.saturation = Float(recipe.saturation)
         let temperature = CIFilter.temperatureAndTint(); temperature.inputImage = controls.outputImage
-        temperature.neutral = CIVector(x: CGFloat(recipe.temperature), y: 0)
+        temperature.neutral = CIVector(x: CGFloat(recipe.temperature), y: CGFloat(recipe.tint))
         temperature.targetNeutral = CIVector(x: 6500, y: 0)
         guard var result = temperature.outputImage else { throw ZoraError.malformed("滤镜输出") }
+        let extent = image.extent
+        if recipe.highlightRecovery > 0 || recipe.shadows != 0 {
+            let tone = CIFilter.highlightShadowAdjust(); tone.inputImage = result
+            tone.highlightAmount = Float(1 - recipe.highlightRecovery); tone.shadowAmount = Float(recipe.shadows)
+            if let output = tone.outputImage { result = output.cropped(to: extent) }
+        }
+        if recipe.vibrance != 0 {
+            let vibrance = CIFilter.vibrance(); vibrance.inputImage = result; vibrance.amount = Float(recipe.vibrance)
+            if let output = vibrance.outputImage { result = output }
+        }
+        if recipe.vignette > 0 {
+            let vignette = CIFilter.vignette(); vignette.inputImage = result
+            vignette.intensity = Float(recipe.vignette); vignette.radius = 1.6
+            if let output = vignette.outputImage { result = output.cropped(to: extent) }
+        }
+        if recipe.grain > 0, let noise = CIFilter.randomGenerator().outputImage {
+            // Monochrome noise at constant alpha, soft-light blended: grain without a colour cast.
+            let mono = noise.applyingFilter("CIColorMatrix", parameters: [
+                "inputRVector": CIVector(x: 0, y: 1, z: 0, w: 0), "inputGVector": CIVector(x: 0, y: 1, z: 0, w: 0),
+                "inputBVector": CIVector(x: 0, y: 1, z: 0, w: 0), "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 0),
+                "inputBiasVector": CIVector(x: 0, y: 0, z: 0, w: CGFloat(recipe.grain * 0.35))
+            ]).cropped(to: extent)
+            result = mono.applyingFilter("CISoftLightBlendMode", parameters: [kCIInputBackgroundImageKey: result]).cropped(to: extent)
+        }
         if let cube {
             let lut = CIFilter.colorCube(); lut.inputImage = result; lut.cubeDimension = Float(cube.dimension); lut.cubeData = cube.data
             guard let output = lut.outputImage else { throw ZoraError.malformed("LUT 输出") }; result = output
@@ -62,10 +86,21 @@ actor ImageProcessor {
         return ProcessedPreview(jpeg: jpeg, histogram: analysis.histogram, clippedFraction: analysis.clippedFraction,
                                 peakingPNG: overlay(analysis.peaking, zebra: false), zebraPNG: overlay(analysis.zebra, zebra: true))
     }
-    func export(url: URL, recipe: Recipe, cube: CubeLUT?, to target: URL) throws {
+    /// Keeps source EXIF, resets orientation (pixels are already upright) and adds the
+    /// phone-side GPS fix when the user enabled geotagging.
+    func export(url: URL, recipe: Recipe, cube: CubeLUT?, location: GeoTag? = nil, to target: URL) throws {
         guard let source = CIImage(contentsOf: url, options: [.applyOrientationProperty: true]) else { throw ZoraError.unsupported("此 RAW 暂无法解码") }
-        let result = try apply(recipe, cube: cube, image: source)
-        guard let data = context.jpegRepresentation(of: result, colorSpace: colorSpace, options: [:]) else { throw ZoraError.malformed("JPEG export") }
+        var properties = source.properties
+        properties[kCGImagePropertyOrientation as String] = 1
+        if var tiff = properties[kCGImagePropertyTIFFDictionary as String] as? [String: Any] {
+            tiff[kCGImagePropertyTIFFOrientation as String] = 1; properties[kCGImagePropertyTIFFDictionary as String] = tiff
+        }
+        if let location, properties[kCGImagePropertyGPSDictionary as String] == nil {
+            properties[kCGImagePropertyGPSDictionary as String] = location.exifGPS()
+        }
+        let result = try apply(recipe, cube: cube, image: source).settingProperties(properties)
+        let options = [CIImageRepresentationOption(rawValue: kCGImageDestinationLossyCompressionQuality as String): 0.92]
+        guard let data = context.jpegRepresentation(of: result, colorSpace: colorSpace, options: options) else { throw ZoraError.malformed("JPEG export") }
         try data.write(to: target, options: .atomic)
     }
 }

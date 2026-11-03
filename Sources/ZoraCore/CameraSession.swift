@@ -20,6 +20,9 @@ public actor CameraSession {
     private var remoteOwned = false
     public private(set) var recentEvents: [CameraEvent] = []
     public private(set) var storageRevision: UInt64 = 0
+    /// Monotonic across reconnects so consumers never re-handle an old event.
+    public private(set) var eventSequence: UInt64 = 0
+    private var eventLog: [(sequence: UInt64, event: CameraEvent)] = []
     private var generation = UUID()
     private let guid: UUID
     private let factory: @Sendable (String, UInt16) throws -> any PTPPacketTransport
@@ -87,7 +90,23 @@ public actor CameraSession {
     private func receiveEvent(_ event: CameraEvent, generation expected: UUID) {
         guard generation == expected else { return }
         recentEvents.append(event); if recentEvents.count > 40 { recentEvents.removeFirst(recentEvents.count-40) }
+        eventSequence &+= 1; eventLog.append((sequence: eventSequence, event: event))
+        if eventLog.count > 200 { eventLog.removeFirst(eventLog.count-200) }
         if event.changesStorage { storageRevision &+= 1 }
+    }
+    /// Events newer than `sequence`. Older entries beyond the bounded log are dropped, not replayed.
+    public func events(after sequence: UInt64) -> (events: [CameraEvent], latest: UInt64) {
+        (eventLog.filter { $0.sequence > sequence }.map { $0.event }, eventSequence)
+    }
+    /// Nikon cameras may queue events for CheckEvent instead of the interrupt/event channel.
+    /// Returns the number of events received; cameras without 0x90C7 return 0 without traffic.
+    @discardableResult public func pollEvents() async throws -> Int {
+        guard let device else { throw ZoraError.disconnected }
+        guard device.operations.contains(PTPOperation.checkEvent) else { return 0 }
+        let expected = generation
+        let list = try NikonEventList.parse(await run(PTPOperation.checkEvent).data)
+        for event in list { receiveEvent(event, generation: expected) }
+        return list.count
     }
     private func eventFailed(generation expected: UUID) async {
         if generation == expected { await shutdown() }
@@ -104,7 +123,7 @@ public actor CameraSession {
         let oldDirect = direct, oldCommand = command, oldEvents = events
         generation = UUID()
         eventTask?.cancel(); eventTask = nil
-        direct = nil; command = nil; events = nil; device = nil; live = false; remoteOwned = false; recentEvents = []
+        direct = nil; command = nil; events = nil; device = nil; live = false; remoteOwned = false; recentEvents = []; eventLog = []
         // Detach before awaiting OS close: a stale close must not clear a new session.
         await oldDirect?.close(); await oldCommand?.close(); await oldEvents?.close()
     }
@@ -165,25 +184,53 @@ public actor CameraSession {
         throw ZoraError.timeout
     }
     public func autoFocus() async throws { _ = try await run(PTPOperation.autoFocus) }
+    public func cancelAutoFocus() async throws { _ = try await run(PTPOperation.cancelAutoFocus) }
+    /// Touch AF. Coordinates come from a validated live-view header, never from raw screen pixels.
+    public func setAFArea(x: Double, y: Double, geometry: LiveViewGeometry) async throws {
+        guard live else { throw ZoraError.unsupported("触摸对焦需要先开始实时取景") }
+        let point = try geometry.sensorPoint(x: x, y: y)
+        _ = try await run(PTPOperation.changeAFArea, parameters: [point.x, point.y])
+    }
+    /// Bounded DeviceReady wait used between sequence shots; cameras without 0x90C8 return at once.
+    public func waitUntilReady(timeout: Duration = .seconds(10)) async throws {
+        guard device?.operations.contains(PTPOperation.deviceReady) == true else { return }
+        let clock = ContinuousClock()
+        let deadline = clock.now + timeout
+        while true {
+            do { _ = try await run(PTPOperation.deviceReady); return }
+            catch ZoraError.cameraResponse(0x2019) {
+                guard clock.now < deadline else { throw ZoraError.timeout }
+                try await Task.sleep(for: .milliseconds(100))
+            }
+        }
+    }
     public func startLiveView() async throws {
         guard device != nil else { throw ZoraError.disconnected }
         guard !live else { return }
         _ = try await run(PTPOperation.startLiveView); live = true
     }
     public func stopLiveView() async throws { _ = try await run(PTPOperation.endLiveView); live = false }
-    public func frame() async throws -> Data {
+    public var isLive: Bool { live }
+    public func frame() async throws -> Data { try await liveFrame().jpeg }
+    public func liveFrame() async throws -> LiveFrame {
         guard live else { throw ZoraError.unsupported("实时取景未开始") }
-        return try LiveViewJPEG.extract(await run(PTPOperation.liveViewImage).data)
+        let data = try await run(PTPOperation.liveViewImage).data
+        return LiveFrame(jpeg: try LiveViewJPEG.extract(data), geometry: LiveViewGeometry.parse(data))
     }
+    public static let propertyCodes: [UInt16] = [0x500e, 0x5007, 0x500D, 0xD100, 0x500F, 0x5010, 0x5005, 0x500a, 0x500b, 0x5004, 0x5013, 0x500C, 0x5001]
     public func properties() async throws -> [CameraProperty] {
         guard let device else { throw ZoraError.disconnected }
         var result: [CameraProperty] = []
-        for code: UInt16 in [0x5007, 0x500D, 0x500F, 0x5010, 0x5005, 0x500e, 0x500a, 0x500b, 0x5004, 0x5013, 0x5001] where device.properties.contains(code) {
+        for code in Self.propertyCodes where device.properties.contains(code) {
             let data = try await run(PTPOperation.propertyDescription, parameters: [UInt32(code)]).data
             do { result.append(try CameraProperty(data: data)) }
             catch ZoraError.unsupported { continue }
         }
         return result
+    }
+    public func property(_ code: UInt16) async throws -> CameraProperty {
+        guard device?.properties.contains(code) == true else { throw ZoraError.unsupported(String(format: "相机未声明属性 %04X", code)) }
+        return try CameraProperty(data: await run(PTPOperation.propertyDescription, parameters: [UInt32(code)]).data)
     }
     public func set(_ property: CameraProperty, value: Int64) async throws {
         _ = try await run(PTPOperation.setProperty, parameters: [UInt32(property.code)], sending: property.encode(value))
@@ -193,19 +240,27 @@ public actor CameraSession {
         var objects: [CameraObject] = []
         for store in stores {
             var handles = BinaryReader(try await run(PTPOperation.objectHandles, parameters: [store, 0, 0]).data)
-            // Explicit cap prevents locking the UI for very large cards. Further paging is a hardware follow-up.
+            // Explicit cap prevents locking the UI for very large cards. Use objectPage for paging.
             for handle in try handles.array32().prefix(200) {
                 objects.append(try CameraObject(handle: handle, data: await run(PTPOperation.objectInfo, parameters: [handle]).data))
             }
         }
         return objects
     }
-    public func download(_ object: CameraObject, to target: URL) async throws {
-        if device?.operations.contains(PTPOperation.partialObject) == true { try await downloadChunks(object, to: target); return }
+    public func objectInfo(_ handle: UInt32) async throws -> CameraObject {
+        try CameraObject(handle: handle, data: await run(PTPOperation.objectInfo, parameters: [handle]).data)
+    }
+    /// Deletes one object on the card. Callers must confirm with the user first; no batch or format command exists here.
+    public func deleteObject(_ handle: UInt32) async throws {
+        _ = try await run(PTPOperation.deleteObject, parameters: [handle, 0]); storageRevision &+= 1
+    }
+    public func download(_ object: CameraObject, to target: URL, progress: (@Sendable (DownloadProgress) -> Void)? = nil) async throws {
+        if device?.operations.contains(PTPOperation.partialObject) == true { try await downloadChunks(object, to: target, progress: progress); return }
         guard object.size <= 64*1024*1024 else { throw ZoraError.unsupported("相机未声明分块下载，超过 64 MiB 的文件请用 Files 导入") }
         let data = try await run(PTPOperation.getObject, parameters: [object.id]).data
         guard data.count == Int(object.size) else { throw ZoraError.malformed("download size mismatch") }
         try data.write(to: target, options: .atomic)
+        progress?(DownloadProgress(received: UInt64(data.count), total: UInt64(object.size), resumedFrom: 0))
     }
     public func storageIDs() async throws -> [UInt32] {
         let op = device?.operations.contains(PTPOperation.vendorStorageIDs) == true ? PTPOperation.vendorStorageIDs : PTPOperation.storageIDs
@@ -229,25 +284,58 @@ public actor CameraSession {
     public func thumbnail(_ handle: UInt32) async throws -> Data {
         try LiveViewJPEG.extract(await run(PTPOperation.thumbnail, parameters: [handle]).data)
     }
-    private func downloadChunks(_ object: CameraObject, to target: URL) async throws {
+    /// Partial files are named from the object's stable identity so an interrupted transfer
+    /// (disconnect, cancel, timeout) resumes after reconnect. Invalid data always discards them.
+    public static func partialName(for object: CameraObject) -> String {
+        let digest = SHA256Digest.hex(SHA256Digest.hash(Data(object.sourceKey.utf8)))
+        return ".zora-\(digest.prefix(24)).partial"
+    }
+    static func resumable(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        guard let value = error as? ZoraError else { return true } // Transport-level failures.
+        switch value { case .disconnected, .timeout, .busy: return true; default: return false }
+    }
+    private func chunk(_ handle: UInt32, offset: UInt32, count: UInt32) async throws -> PTPResult {
+        for attempt in 0..<3 {
+            do { return try await run(PTPOperation.partialObject, parameters: [handle, offset, count]) }
+            catch ZoraError.cameraResponse(0x2019) where attempt < 2 { try await Task.sleep(for: .milliseconds(250)) }
+        }
+        throw ZoraError.busy
+    }
+    private func downloadChunks(_ object: CameraObject, to target: URL, progress: (@Sendable (DownloadProgress) -> Void)?) async throws {
         guard object.size != UInt32.max, object.format != 0x3001 else { throw ZoraError.unsupported("目录或需要 64 位对象扩展的文件不能在此下载") }
         guard !FileManager.default.fileExists(atPath: target.path) else { throw ZoraError.unsupported("目标文件已存在") }
-        let staging = target.deletingLastPathComponent().appendingPathComponent(".\(UUID()).partial")
-        guard FileManager.default.createFile(atPath: staging.path, contents: nil) else { throw ZoraError.unsupported("无法创建下载临时文件") }
-        defer { try? FileManager.default.removeItem(at: staging) }
-        let file = try FileHandle(forWritingTo: staging); defer { try? file.close() }
-        let expected = generation
+        let staging = target.deletingLastPathComponent().appendingPathComponent(Self.partialName(for: object))
+        let existing = (try? FileManager.default.attributesOfItem(atPath: staging.path)[.size] as? NSNumber)?.uint64Value ?? 0
         var offset: UInt32 = 0
-        while offset < object.size {
-            try Task.checkCancellation(); guard generation == expected else { throw ZoraError.disconnected }
-            let count = min(UInt32(4*1024*1024), object.size-offset)
-            let result = try await run(PTPOperation.partialObject, parameters: [object.id, offset, count])
-            guard !result.data.isEmpty, result.data.count <= Int(count),
-                  result.parameters.first == UInt32(result.data.count) else { throw ZoraError.malformed("分块下载长度或响应字节数不一致") }
-            try file.write(contentsOf: result.data); offset += UInt32(result.data.count)
+        if existing > 0, existing < UInt64(object.size) { offset = UInt32(existing) }
+        else {
+            try? FileManager.default.removeItem(at: staging)
+            guard FileManager.default.createFile(atPath: staging.path, contents: nil) else { throw ZoraError.unsupported("无法创建下载临时文件") }
         }
-        try file.synchronize(); try file.close()
-        try Task.checkCancellation(); guard generation == expected else { throw ZoraError.disconnected }
-        try FileManager.default.moveItem(at: staging, to: target)
+        let resumedFrom = UInt64(offset)
+        let file = try FileHandle(forWritingTo: staging)
+        var closed = false
+        defer { if !closed { try? file.close() } }
+        let expected = generation
+        do {
+            try file.truncate(atOffset: UInt64(offset)); try file.seek(toOffset: UInt64(offset))
+            while offset < object.size {
+                try Task.checkCancellation(); guard generation == expected else { throw ZoraError.disconnected }
+                let count = min(UInt32(4*1024*1024), object.size-offset)
+                let result = try await chunk(object.id, offset: offset, count: count)
+                guard !result.data.isEmpty, result.data.count <= Int(count),
+                      result.parameters.first == UInt32(result.data.count) else { throw ZoraError.malformed("分块下载长度或响应字节数不一致") }
+                try file.write(contentsOf: result.data); offset += UInt32(result.data.count)
+                progress?(DownloadProgress(received: UInt64(offset), total: UInt64(object.size), resumedFrom: resumedFrom))
+            }
+            try file.synchronize(); try file.close(); closed = true
+            try Task.checkCancellation(); guard generation == expected else { throw ZoraError.disconnected }
+            try FileManager.default.moveItem(at: staging, to: target)
+        } catch {
+            if !closed { try? file.close(); closed = true }
+            if !(Self.resumable(error) && offset > 0) { try? FileManager.default.removeItem(at: staging) }
+            throw error
+        }
     }
 }

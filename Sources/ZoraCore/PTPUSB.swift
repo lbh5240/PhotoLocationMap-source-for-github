@@ -27,7 +27,32 @@ public struct CameraEvent: Sendable, Equatable {
         let header = try PTPUSBContainer.parse(usbContainer, type: 4, maximumParameters: 3)
         self.init(code: header.code, transaction: header.transaction, parameters: header.parameters)
     }
-    public var changesStorage: Bool { [0x4002,0x4003,0x4004,0x4005,0x4007,0x4008,0x4009,0x400d].contains(code) }
+    public var changesStorage: Bool { [0x4002,0x4003,0x4004,0x4005,0x4007,0x4008,0x4009,0x400d,0xc101].contains(code) }
+    /// ObjectAdded carries the new handle; Nikon SDRAM captures are not on a card and are not imported.
+    public var addedObject: UInt32? { code == 0x4002 ? parameters.first : nil }
+    public var changesProperty: Bool { code == 0x4006 }
+    public var name: String {
+        switch code {
+        case 0x4002: "新增文件"; case 0x4003: "文件已删除"; case 0x4004: "插入存储卡"; case 0x4005: "移除存储卡"
+        case 0x4006: "相机设置改变"; case 0x4007: "文件信息改变"; case 0x4008: "设备信息改变"; case 0x4009: "请求传输"
+        case 0x400a: "存储卡已满"; case 0x400c: "存储卡信息改变"; case 0x400d: "拍摄完成"
+        case 0xc101: "Nikon 内存图像"; case 0xc102: "Nikon 内存拍摄完成"; case 0xc105: "Nikon 预览图"
+        default: String(format: "事件 %04X", code)
+        }
+    }
+}
+
+/// Nikon CheckEvent (0x90C7) payload: UInt16 count, then count × (UInt16 code, UInt32 parameter).
+public enum NikonEventList {
+    public static func parse(_ data: Data) throws -> [CameraEvent] {
+        var r = BinaryReader(data)
+        let count = Int(try r.integer(UInt16.self))
+        guard count <= (data.count - 2) / 6 else { throw ZoraError.malformed("Nikon event list") }
+        return try (0..<count).map { _ in
+            let code = try r.integer(UInt16.self), parameter = try r.integer(UInt32.self)
+            return CameraEvent(code: code, transaction: 0, parameters: [parameter])
+        }
+    }
 }
 
 public enum PTPUSBContainer {
@@ -76,3 +101,9 @@ public struct CameraObjectPage: Sendable {
 }
 
 public enum FocusDriveResult: Sendable, Equatable { case completed, accepted, endOfTravel, stepTooSmall }
+
+public struct DownloadProgress: Sendable, Equatable {
+    public let received: UInt64, total: UInt64
+    public let resumedFrom: UInt64
+    public var fraction: Double { total == 0 ? 1 : Double(received) / Double(total) }
+}
