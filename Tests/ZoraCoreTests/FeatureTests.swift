@@ -123,7 +123,9 @@ final class FeatureTests: XCTestCase, @unchecked Sendable {
         let progress = ProgressRecorder()
         try await camera.download(object, to: target) { value in progress.record(value) }
         let offsets = await fixture.calls.filter { $0.code == 0x101b }.map { $0.parameters[1] }
-        XCTAssertEqual(offsets, [0, 4*1024*1024, 4*1024*1024, 8*1024*1024])
+        let mib: UInt32 = 1024 * 1024
+        let expectedOffsets: [UInt32] = [0, 4 * mib, 4 * mib, 8 * mib]
+        XCTAssertEqual(offsets, expectedOffsets)
         let bytes = try FileManager.default.attributesOfItem(atPath: target.path)[.size] as? NSNumber
         XCTAssertEqual(bytes?.uint64Value, UInt64(size)); XCTAssertFalse(FileManager.default.fileExists(atPath: partial.path))
         let file = try FileHandle(forReadingFrom: target); defer { try? file.close() }
