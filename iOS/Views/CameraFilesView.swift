@@ -46,7 +46,7 @@ struct CameraFilesView: View {
                 }
                 if !model.cameraObjects.isEmpty {
                     Section {
-                        Picker("筛选", selection: $filter) { ForEach(Filter.allCases) { Text($0.rawValue).tag($0) } }.pickerStyle(.segmented)
+                        FilterChips(options: Filter.allCases, selection: $filter) { $0.rawValue }.listRowBackground(Color.clear)
                         HStack {
                             Button("导入列表中全部新照片", systemImage: "square.and.arrow.down.on.square") {
                                 model.perform { try await model.downloadAll(kinds: model.autoImportRAW ? [.jpeg, .heif, .raw] : [.jpeg, .heif]) }
@@ -89,7 +89,7 @@ struct CameraFilesView: View {
                 }
                 Text("已显示 \(model.cameraObjects.count) / \(model.objectTotal) 项" + (model.device?.canDelete == true ? " · 向左滑动可删除相机上的单个文件" : "")).font(.caption).foregroundStyle(.secondary)
                 if model.nextObjectOffset != nil { Button("加载下一页") { model.perform { try await model.loadCameraPage(reset: false) } }.disabled(model.busy) }
-            }.navigationTitle("相机文件").toolbar { Button("完成") { dismiss() } }
+            }.scrollContentBackground(.hidden).zoraPage().navigationTitle("相机文件").toolbar { Button("完成") { dismiss() } }
                 .confirmationDialog("从相机存储卡删除？", isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }), titleVisibility: .visible, presenting: pendingDelete) { object in
                     Button("删除 \(object.filename)", role: .destructive) { model.perform { try await model.deleteCameraObject(object) } }
                 } message: { _ in Text("文件将从相机存储卡上永久删除，无法恢复。受保护的文件会被相机拒绝。") }

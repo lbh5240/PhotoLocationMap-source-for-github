@@ -98,7 +98,7 @@ struct ConnectionView: View {
                         }
                     }
                 }
-            }.navigationTitle("相机连接").toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
+            }.scrollContentBackground(.hidden).zoraPage().navigationTitle("相机连接").toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
         }
     }
 }

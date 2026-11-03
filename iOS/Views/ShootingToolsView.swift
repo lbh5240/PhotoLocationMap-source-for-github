@@ -75,7 +75,7 @@ struct ShootingToolsView: View {
                 if let status = model.sequenceStatus {
                     Section { HStack { ProgressView(); Text(status).monospacedDigit(); Spacer(); Button("停止", role: .destructive) { model.cancelOperation() } } }
                 }
-            }.navigationTitle("拍摄工具").toolbar { Button("完成") { dismiss() } }
+            }.scrollContentBackground(.hidden).zoraPage().navigationTitle("拍摄工具").toolbar { Button("完成") { dismiss() } }
         }
     }
     private func start(_ run: @escaping @MainActor () async throws -> Void) {
