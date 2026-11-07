@@ -55,8 +55,8 @@ int main(int argc,char** argv) {
         int w=96,h=80;std::vector<Input> ins;std::normal_distribution<float> n(0,.02);double inputVar=0;
         for(int f=0;f<15;f++){std::vector<float> v(size_t(w)*h*4);for(int p=0;p<w*h;p++){float delta=n(gen);inputVar+=delta*delta;for(int c=0;c<3;c++)v[p*4+c]=.25f+delta;v[p*4+3]=1;}if(f==3)for(int c=0;c<3;c++)v[(30*w+40)*4+c]=8;std::string p=dir+"/f"+std::to_string(f);save(p,v);ins.push_back({p,{},1});}
         Settings cfg;std::atomic<bool> cancel(false);double progress=0;std::string output=dir+"/result";
-        stack(ins,w,h,cfg,output,cancel,[&](double p){check(p>=progress,"monotonic progress");progress=p;});auto result=load(output,w,h);double variance=0,mean=0;
-        for(int p=0;p<w*h;p++){variance+=std::pow(result[p*4]-.25,2);mean+=result[p*4];check(result[p*4+3]==1,"valid coverage");}
+        stack(ins,w,h,cfg,output,cancel,[&](double p){check(p>=progress,"monotonic progress");progress=p;});auto result=load(output,w,h);double variance=0;
+        for(int p=0;p<w*h;p++){variance+=std::pow(result[p*4]-.25,2);check(result[p*4+3]==1,"valid coverage");}
         double ratio=std::sqrt(variance/(w*h))/std::sqrt(inputVar/(15*w*h));check(ratio<.4&&std::abs(result[(30*w+40)*4]-.25)<.05,"noise reduction and sigma rejection");
         std::cout<<"PASS real pixel stack: noise ratio "<<ratio<<", outlier="<<result[(30*w+40)*4]<<"\n";
         cfg.mode=Mode::trails;stack(ins,w,h,cfg,dir+"/trails",cancel,[](double){});auto trail=load(dir+"/trails",w,h);check(trail[(30*w+40)*4]==8,"trails maximum blend");std::cout<<"PASS trails maximum\n";
