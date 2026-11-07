@@ -29,7 +29,8 @@ enum AstroProcessing {
         vec3 color = base * (target / max(y, 0.000001));
         float gas = (1.0 - star * protect) * smoothstep(0.012, 0.16, lowL) *
                     (1.0 - smoothstep(0.55, 0.9, lowL));
-        color = mix(color, max(color + (color - vec3(dot(color, vec3(0.2126, 0.7152, 0.0722)))) * 0.5,
+        color = mix(color, max(color * 1.55 +
+                               (color - vec3(dot(color, vec3(0.2126, 0.7152, 0.0722)))) * 0.18,
                                vec3(0.0)), gas * nebula);
         color += max(rgb - low, vec3(0.0)) * star * protect;
         return vec4(color, source.a);
@@ -46,21 +47,27 @@ enum AstroProcessing {
     }
     """)
 
-    static func process(_ image: CIImage, adjustments: Adjustments, profile: AstroProfile) -> CIImage {
+    static func process(_ image: CIImage, adjustments: Adjustments, profile: AstroProfile) throws -> CIImage {
         let arc = adjustments.arcsinh ?? 0
         let masked = adjustments.maskedStretch ?? 0
         let gradient = adjustments.gradientRemoval ?? 0
         let gas = adjustments.nebulaContrast ?? 0
-        let protect = adjustments.starProtection ?? 0
+        let protect = adjustments.starProtection ?? 1
         guard arc > 0 || gradient > 0 || gas > 0 else { return image }
         let blur = image.clampedToExtent().applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 7]).cropped(to: image.extent)
         let bg = profile.background.transformed(by: CGAffineTransform(scaleX: image.extent.width / profile.background.extent.width,
                                                                        y: image.extent.height / profile.background.extent.height))
-        return stretchKernel?.apply(extent: image.extent, arguments: [image, blur, bg, arc, masked, gradient, gas, protect]) ?? image
+        guard let result = stretchKernel?.apply(extent: image.extent, arguments: [image, blur, bg, arc, masked, gradient, gas, protect]) else {
+            throw AstroError.message("星云处理内核不可用，请检查设备系统版本")
+        }
+        return result
     }
 
-    static func screenStretch(_ image: CIImage, profile: AstroProfile) -> CIImage {
-        stfKernel?.apply(extent: image.extent, arguments: [image, profile.black, profile.white]) ?? image
+    static func screenStretch(_ image: CIImage, profile: AstroProfile) throws -> CIImage {
+        guard let result = stfKernel?.apply(extent: image.extent, arguments: [image, profile.black, profile.white]) else {
+            throw AstroError.message("STF 预览内核不可用，请检查设备系统版本")
+        }
+        return result
     }
 
     static func profile(_ data: Data, width: Int, height: Int, linear: CGColorSpace,

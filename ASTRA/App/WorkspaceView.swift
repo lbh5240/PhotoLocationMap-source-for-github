@@ -267,7 +267,7 @@ struct WorkspaceView: View {
                     .font(.caption2).foregroundStyle(.secondary)
                 ParameterInspector(parameters: [
                     astroParameter("Arcsinh 拉伸", "sparkles", \.arcsinh, 0...60),
-                    astroParameter("核心保护", "circle.dotted.circle", \.maskedStretch, 0...1),
+                    astroParameter("Masked Stretch · 核心保护", "circle.dotted.circle", \.maskedStretch, 0...1),
                     astroParameter("背景梯度消除", "moon.stars", \.gradientRemoval, 0...1),
                     astroParameter("星云对比", "cloud", \.nebulaContrast, 0...1),
                     astroParameter("星点保护", "sparkle", \.starProtection, 0...1, neutral: 1)

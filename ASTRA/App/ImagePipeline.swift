@@ -158,10 +158,10 @@ final class ImagePipeline {
         return AstroProcessing.profile(sample.data, width: sample.width, height: sample.height,
                                        linear: linear, bitmapRowsTopFirst: bitmapRowsTopFirst)
     }
-    func edit(_ source: CIImage, _ a: Adjustments, profile: AstroProfile? = nil) -> CIImage {
+    func edit(_ source: CIImage, _ a: Adjustments, profile: AstroProfile? = nil) throws -> CIImage {
         let extent = source.extent
         let needsAstro = (a.arcsinh ?? 0) > 0 || (a.gradientRemoval ?? 0) > 0 || (a.nebulaContrast ?? 0) > 0
-        var im = needsAstro ? AstroProcessing.process(source, adjustments: a, profile: profile ?? astroProfile(source)) : source
+        var im = needsAstro ? try AstroProcessing.process(source, adjustments: a, profile: profile ?? astroProfile(source)) : source
         if a.exposure != 0 { im = im.applyingFilter("CIExposureAdjust", parameters: [kCIInputEVKey: a.exposure]) }
         if a.warmth != 0 || a.tint != 0 { im = im.applyingFilter("CITemperatureAndTint", parameters: ["inputNeutral": CIVector(x: 6500 + a.warmth * 25, y: a.tint), "inputTargetNeutral": CIVector(x: 6500, y: 0)]) }
         if a.noise > 0 { im = im.clampedToExtent().applyingFilter("CINoiseReduction", parameters: ["inputNoiseLevel": a.noise * 0.08, "inputSharpness": 0]).cropped(to: extent) }
@@ -180,13 +180,13 @@ final class ImagePipeline {
                  profile: AstroProfile? = nil, autoSTF: Bool = false) throws -> CGImage {
         let s = min(1, Double(maxSide) / max(image.extent.width, image.extent.height))
         let resized = image.transformed(by: CGAffineTransform(scaleX: s, y: s))
-        let edited = edit(resized, adjustments, profile: profile)
-        let shown = autoSTF ? AstroProcessing.screenStretch(edited, profile: profile ?? astroProfile(resized)) : edited
+        let edited = try edit(resized, adjustments, profile: profile)
+        let shown = autoSTF ? try AstroProcessing.screenStretch(edited, profile: profile ?? astroProfile(resized)) : edited
         guard let cg = context.createCGImage(shown, from: shown.extent, format: .RGBA8, colorSpace: display) else { throw AstroError.message("预览渲染失败") }
         return cg
     }
     func export(image: CIImage, adjustments: Adjustments, kind: ExportKind, url: URL) throws {
-        let im = edit(image, adjustments)
+        let im = try edit(image, adjustments)
         switch kind {
         case .tiff: try context.writeTIFFRepresentation(of: im, to: url, format: .RGBA16, colorSpace: display, options: [:])
         case .png: try context.writePNGRepresentation(of: im, to: url, format: .RGBA16, colorSpace: display, options: [:])

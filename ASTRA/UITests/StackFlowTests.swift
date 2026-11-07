@@ -48,6 +48,9 @@ final class StackFlowTests: XCTestCase {
         app.buttons["editor-tool-astro"].tap()
         XCTAssertTrue(app.switches["auto-stf-toggle"].exists)
         XCTAssertTrue(app.staticTexts["Arcsinh 拉伸"].exists)
+        app.buttons["增大Arcsinh 拉伸"].tap()
+        XCTAssertTrue(app.staticTexts["ruler-value"].exists)
+        XCTAssertFalse(app.alerts["ASTRA"].exists, "星云处理内核必须实际运行")
         app.switches["auto-stf-toggle"].tap()
         XCTAssertTrue(app.buttons["导出照片"].isEnabled)
     }
