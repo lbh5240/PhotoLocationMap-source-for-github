@@ -11,6 +11,7 @@ results = [(folder, p) for folder, p in projects if p.get('result')]
 assert len(results) == 1, f'Expected one successful project, got {len(results)}'
 folder, project = results[0]
 result = project['result']
+assert result["bottomFirst"] is True
 assert len(project['frames']) == 3 and result['acceptedFrames'] == 3
 assert (result['width'], result['height']) == (384, 256)
 master = (folder / result['fileName']).read_bytes()

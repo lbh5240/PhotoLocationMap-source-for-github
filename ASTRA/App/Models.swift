@@ -81,6 +81,7 @@ struct StackResult: Codable, Sendable {
     var acceptedFrames: Int
     var created = Date()
     var mode: StackMode
+    var bottomFirst: Bool?
 }
 struct AstroProject: Identifiable, Codable, Sendable {
     var schema = 1

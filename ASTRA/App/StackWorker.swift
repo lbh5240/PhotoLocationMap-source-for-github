@@ -101,6 +101,6 @@ enum StackWorker {
             if token.isCancelled() { throw CancellationError() }
             throw AstroError.message(error)
         }
-        return StackWorkResult(frames: frames, result: StackResult(fileName: fileName, width: w, height: h, acceptedFrames: accepted.count, mode: cfg.mode), formatNote: formatNote)
+        return StackWorkResult(frames: frames, result: StackResult(fileName: fileName, width: w, height: h, acceptedFrames: accepted.count, mode: cfg.mode, bottomFirst: true), formatNote: formatNote)
     }
 }

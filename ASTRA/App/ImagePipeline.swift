@@ -10,9 +10,60 @@ final class ImagePipeline {
     let linear = CGColorSpace(name: CGColorSpace.extendedLinearSRGB)!
     let display = CGColorSpace(name: CGColorSpace.sRGB)!
     let context: CIContext
+    // Core Image bitmap row order is independent of its bottom-left coordinate space.
+    // Normalize both pixel formats so that proxy analysis and tiled caches share one grid.
+    private lazy var floatRowsTopFirst = renderRowsTopFirst(.RGBAf)
+    private lazy var halfRowsTopFirst = renderRowsTopFirst(.RGBAh)
+    private lazy var bitmapRowsTopFirst: Bool = {
+        let values = Array(repeating: [Float(1), 0, 0, 1], count: 16 * 4).flatMap { $0 } +
+                     Array(repeating: [Float(0), 0, 0, 1], count: 16 * 4).flatMap { $0 }
+        let image = CIImage(bitmapData: values.withUnsafeBufferPointer { Data(buffer: $0) }, bytesPerRow: 16 * 16,
+                            size: CGSize(width: 16, height: 8), format: .RGBAf, colorSpace: linear)
+        return firstRowIsRed(image, format: .RGBAf) == floatRowsTopFirst
+    }()
     init() {
         context = CIContext(options: [.workingColorSpace: CGColorSpace(name: CGColorSpace.extendedLinearSRGB)!, .workingFormat: NSNumber(value: CIFormat.RGBAf.rawValue), .cacheIntermediates: false, .highQualityDownsample: true])
     }
+    private func renderRowsTopFirst(_ format: CIFormat) -> Bool {
+        let lower = CIImage(color: CIColor(red: 0, green: 0, blue: 0)).cropped(to: CGRect(x: 0, y: 0, width: 16, height: 8))
+        let upper = CIImage(color: CIColor(red: 1, green: 0, blue: 0)).cropped(to: CGRect(x: 0, y: 4, width: 16, height: 4))
+        return firstRowIsRed(upper.composited(over: lower), format: format)
+    }
+
+    private func firstRowIsRed(_ image: CIImage, format: CIFormat) -> Bool {
+        let rowBytes = Int(image.extent.width) * (format == .RGBAh ? 8 : 16)
+        let lastRow = (Int(image.extent.height) - 1) * rowBytes
+        var data = Data(count: Int(image.extent.height) * rowBytes)
+        return data.withUnsafeMutableBytes { ptr in
+            context.render(image, toBitmap: ptr.baseAddress!, rowBytes: rowBytes, bounds: image.extent,
+                           format: format, colorSpace: linear)
+            if format == .RGBAh {
+                return ptr.loadUnaligned(as: UInt16.self) > ptr.loadUnaligned(fromByteOffset: lastRow, as: UInt16.self)
+            }
+            return ptr.loadUnaligned(as: Float.self) > ptr.loadUnaligned(fromByteOffset: lastRow, as: Float.self)
+        }
+    }
+
+    private func renderBottomFirst(_ image: CIImage, into data: inout Data, rowBytes: Int,
+                                   bounds: CGRect, format: CIFormat, rowsTopFirst: Bool) {
+        data.withUnsafeMutableBytes { ptr in
+            let base = ptr.baseAddress!
+            context.render(image, toBitmap: base, rowBytes: rowBytes, bounds: bounds, format: format, colorSpace: linear)
+            if rowsTopFirst {
+                let row = UnsafeMutableRawPointer.allocate(byteCount: rowBytes, alignment: 16)
+                defer { row.deallocate() }
+                let height = Int(bounds.height)
+                for y in 0..<(height / 2) {
+                    let a = base.advanced(by: y * rowBytes)
+                    let b = base.advanced(by: (height - 1 - y) * rowBytes)
+                    row.copyMemory(from: a, byteCount: rowBytes)
+                    a.copyMemory(from: b, byteCount: rowBytes)
+                    b.copyMemory(from: row, byteCount: rowBytes)
+                }
+            }
+        }
+    }
+
     func decode(_ url: URL) throws -> CIImage {
         let ext = url.pathExtension.lowercased()
         let image: CIImage
@@ -53,7 +104,9 @@ final class ImagePipeline {
         let w = max(1, Int(image.extent.width * scale)), h = max(1, Int(image.extent.height * scale))
         let resized = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
         var data = Data(count: w * h * 16)
-        data.withUnsafeMutableBytes { ptr in context.render(resized, toBitmap: ptr.baseAddress!, rowBytes: w * 16, bounds: CGRect(x: 0, y: 0, width: w, height: h), format: .RGBAf, colorSpace: linear) }
+        let topFirst = floatRowsTopFirst
+        renderBottomFirst(resized, into: &data, rowBytes: w * 16, bounds: CGRect(x: 0, y: 0, width: w, height: h),
+                          format: .RGBAf, rowsTopFirst: topFirst)
         return (data, w, h, scale)
     }
     func cache(_ image: CIImage, at url: URL, token: ASCancelToken) throws {
@@ -63,15 +116,14 @@ final class ImagePipeline {
         }
         let handle = try FileHandle(forWritingTo: url)
         defer { try? handle.close() }
+        let topFirst = halfRowsTopFirst
         for y in stride(from: 0, to: h, by: 128) {
             if token.isCancelled() { throw CancellationError() }
             try autoreleasepool {
                 let rows = min(128, h - y)
                 var data = Data(count: w * rows * 8)
-                data.withUnsafeMutableBytes { p in
-                    context.render(image, toBitmap: p.baseAddress!, rowBytes: w * 8,
-                                   bounds: CGRect(x: 0, y: y, width: w, height: rows), format: .RGBAh, colorSpace: linear)
-                }
+                renderBottomFirst(image, into: &data, rowBytes: w * 8, bounds: CGRect(x: 0, y: y, width: w, height: rows),
+                                  format: .RGBAh, rowsTopFirst: topFirst)
                 try handle.write(contentsOf: data)
             }
         }
@@ -89,7 +141,8 @@ final class ImagePipeline {
         let url = repository.url(project, result.fileName)
         let data = try Data(contentsOf: url, options: .alwaysMapped)
         guard data.count == result.width * result.height * 16 else { throw AstroError.message("合成结果损坏，请重新堆栈") }
-        return CIImage(bitmapData: data, bytesPerRow: result.width * 16, size: CGSize(width: result.width, height: result.height), format: .RGBAf, colorSpace: linear)
+        let image = CIImage(bitmapData: data, bytesPerRow: result.width * 16, size: CGSize(width: result.width, height: result.height), format: .RGBAf, colorSpace: linear)
+        return result.bottomFirst == true && bitmapRowsTopFirst ? image.oriented(.downMirrored) : image
     }
     func edit(_ source: CIImage, _ a: Adjustments) -> CIImage {
         let extent = source.extent
