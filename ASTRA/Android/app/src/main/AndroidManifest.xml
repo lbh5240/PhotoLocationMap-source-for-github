@@ -1,0 +1,10 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:label="星野 ASTRA" android:theme="@style/AppTheme" android:allowBackup="false" android:largeHeap="true" android:supportsRtl="true">
+        <activity android:name=".MainActivity" android:exported="true" android:configChanges="orientation|screenSize" android:screenOrientation="portrait">
+            <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
+        </activity>
+        <provider android:name="androidx.core.content.FileProvider" android:authorities="com.astra.starrynight.files" android:exported="false" android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/share_paths"/>
+        </provider>
+    </application>
+</manifest>
