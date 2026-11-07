@@ -2,6 +2,7 @@ import CoreTransferable
 import Foundation
 import ImageIO
 import PhotosUI
+import SwiftUI
 import UniformTypeIdentifiers
 
 enum PhotoImportSource: Sendable {
