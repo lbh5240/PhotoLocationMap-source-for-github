@@ -1,0 +1,7 @@
+Build/
+.DS_Store
+xcuserdata/
+*.p12
+*.mobileprovision
+*.xcuserstate
+ExportOptions.local.plist

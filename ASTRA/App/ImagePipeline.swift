@@ -1,0 +1,133 @@
+import Foundation
+import CoreImage
+import CoreImage.CIFilterBuiltins
+import ImageIO
+import UniformTypeIdentifiers
+import UIKit
+
+// Confined to one background worker at a time. Never shared with preview workers.
+final class ImagePipeline {
+    let linear = CGColorSpace(name: CGColorSpace.extendedLinearSRGB)!
+    let display = CGColorSpace(name: CGColorSpace.sRGB)!
+    let context: CIContext
+    init() {
+        context = CIContext(options: [.workingColorSpace: CGColorSpace(name: CGColorSpace.extendedLinearSRGB)!, .workingFormat: NSNumber(value: CIFormat.RGBAf.rawValue), .cacheIntermediates: false, .highQualityDownsample: true])
+    }
+    func decode(_ url: URL) throws -> CIImage {
+        let ext = url.pathExtension.lowercased()
+        let rawExtensions = ["nef", "nrw", "dng", "arw", "cr2", "cr3", "raf", "orf", "rw2"]
+        let image: CIImage
+        if rawExtensions.contains(ext) {
+            guard let raw = CIRAWFilter(imageURL: url) else { throw AstroError.message("系统无法解码 RAW：\(url.lastPathComponent)。请检查机型、压缩类型和系统 RAW 支持；不会使用内嵌 JPEG 替代。") }
+            raw.exposure = 0; raw.baselineExposure = 0
+            raw.isDraftModeEnabled = false; raw.scaleFactor = 1
+            raw.isGamutMappingEnabled = false
+            raw.boostAmount = 0; raw.boostShadowAmount = 0
+            if raw.isLocalToneMapSupported { raw.localToneMapAmount = 0 }
+            raw.luminanceNoiseReductionAmount = 0; raw.colorNoiseReductionAmount = 0
+            raw.sharpnessAmount = 0; raw.detailAmount = 0; raw.contrastAmount = 0
+            raw.isLensCorrectionEnabled = false
+            guard let output = raw.outputImage else { throw AstroError.message("RAW 解码失败：\(url.lastPathComponent)") }
+            image = output
+        } else {
+            guard let output = CIImage(contentsOf: url, options: [.applyOrientationProperty: true]) else { throw AstroError.message("无法读取图片：\(url.lastPathComponent)") }
+            image = output
+        }
+        let e = image.extent.integral
+        guard e.width.isFinite, e.height.isFinite, e.width >= 16, e.height >= 16, e.width <= 30000, e.height <= 30000 else { throw AstroError.message("图片尺寸不支持") }
+        return image.transformed(by: CGAffineTransform(translationX: -e.minX, y: -e.minY)).cropped(to: CGRect(origin: .zero, size: e.size))
+    }
+    func metadata(_ url: URL, name: String, stored: String) throws -> FrameRecord {
+        // Decoding outputImage is lazy; a small render verifies the actual RAW decoder.
+        let image = try decode(url)
+        _ = try preview(image: image, adjustments: .neutral, maxSide: 256)
+        var f = FrameRecord(name: name, fileName: stored)
+        f.width = Int(image.extent.width); f.height = Int(image.extent.height)
+        if let source = CGImageSourceCreateWithURL(url as CFURL, nil), let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any] {
+            if let tiff = props[kCGImagePropertyTIFFDictionary as String] as? [String: Any] { f.camera = tiff[kCGImagePropertyTIFFModel as String] as? String ?? "" }
+            if let exif = props[kCGImagePropertyExifDictionary as String] as? [String: Any] {
+                f.exposure = (exif[kCGImagePropertyExifExposureTime as String] as? NSNumber)?.doubleValue
+                f.iso = (exif[kCGImagePropertyExifISOSpeedRatings as String] as? [NSNumber])?.first?.doubleValue
+            }
+        }
+        return f
+    }
+    func proxy(_ image: CIImage, maxSide: Int = 1600) -> (data: Data, width: Int, height: Int, scale: Double) {
+        let scale = min(1, Double(maxSide) / max(image.extent.width, image.extent.height))
+        let w = max(1, Int(image.extent.width * scale)), h = max(1, Int(image.extent.height * scale))
+        let resized = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        var data = Data(count: w * h * 16)
+        data.withUnsafeMutableBytes { ptr in context.render(resized, toBitmap: ptr.baseAddress!, rowBytes: w * 16, bounds: CGRect(x: 0, y: 0, width: w, height: h), format: .RGBAf, colorSpace: linear) }
+        return (data, w, h, scale)
+    }
+    func cache(_ image: CIImage, at url: URL, token: ASCancelToken) throws {
+        let w = Int(image.extent.width), h = Int(image.extent.height), temp = url.appendingPathExtension("partial")
+        guard FileManager.default.createFile(atPath: temp.path, contents: nil) else { throw AstroError.message("无法创建解码缓存") }
+        let handle = try FileHandle(forWritingTo: temp)
+        do {
+            for y in stride(from: 0, to: h, by: 128) {
+                if token.isCancelled() { throw CancellationError() }
+                try autoreleasepool {
+                    let rows = min(128, h - y); var data = Data(count: w * rows * 16)
+                    data.withUnsafeMutableBytes { p in context.render(image, toBitmap: p.baseAddress!, rowBytes: w * 16, bounds: CGRect(x: 0, y: y, width: w, height: rows), format: .RGBAf, colorSpace: linear) }
+                    try handle.write(contentsOf: data)
+                }
+            }
+            try handle.synchronize(); try handle.close()
+            if FileManager.default.fileExists(atPath: url.path) { try FileManager.default.removeItem(at: url) }
+            try FileManager.default.moveItem(at: temp, to: url)
+        } catch { try? handle.close(); try? FileManager.default.removeItem(at: temp); throw error }
+    }
+    func master(_ result: StackResult, repository: ProjectRepository, project: AstroProject) throws -> CIImage {
+        let url = repository.url(project, result.fileName)
+        let data = try Data(contentsOf: url, options: .alwaysMapped)
+        guard data.count == result.width * result.height * 16 else { throw AstroError.message("合成结果损坏，请重新堆栈") }
+        return CIImage(bitmapData: data, bytesPerRow: result.width * 16, size: CGSize(width: result.width, height: result.height), format: .RGBAf, colorSpace: linear)
+    }
+    func edit(_ source: CIImage, _ a: Adjustments) -> CIImage {
+        let extent = source.extent
+        var im = source.applyingFilter("CIExposureAdjust", parameters: [kCIInputEVKey: a.exposure])
+        if a.warmth != 0 || a.tint != 0 { im = im.applyingFilter("CITemperatureAndTint", parameters: ["inputNeutral": CIVector(x: 6500 + a.warmth * 25, y: a.tint), "inputTargetNeutral": CIVector(x: 6500, y: 0)]) }
+        if a.noise > 0 { im = im.clampedToExtent().applyingFilter("CINoiseReduction", parameters: ["inputNoiseLevel": a.noise * 0.08, "inputSharpness": 0]).cropped(to: extent) }
+        im = im.applyingFilter("CIHighlightShadowAdjust", parameters: ["inputShadowAmount": a.shadows, "inputHighlightAmount": a.highlights])
+        im = im.applyingFilter("CIColorControls", parameters: [kCIInputContrastKey: a.contrast, kCIInputSaturationKey: a.saturation])
+        im = im.applyingFilter("CIVibrance", parameters: ["inputAmount": a.vibrance])
+        im = im.applyingFilter("CIToneCurve", parameters: ["inputPoint0": CIVector(x: 0, y: a.black), "inputPoint1": CIVector(x: 0.25, y: a.curveLow), "inputPoint2": CIVector(x: 0.5, y: a.curveMid), "inputPoint3": CIVector(x: 0.75, y: a.curveHigh), "inputPoint4": CIVector(x: 1, y: 1)])
+        if a.hsl.contains(where: { $0 != HSLBand() }) { im = im.applyingFilter("CIColorCubeWithColorSpace", parameters: ["inputCubeDimension": 24, "inputCubeData": colorCube(a.hsl), "inputColorSpace": display]) }
+        if a.sharpness > 0 { im = im.clampedToExtent().applyingFilter("CISharpenLuminance", parameters: [kCIInputSharpnessKey: a.sharpness]).cropped(to: extent) }
+        return im.cropped(to: extent)
+    }
+    func preview(image: CIImage, adjustments: Adjustments, maxSide: Int = 1600) throws -> CGImage {
+        let s = min(1, Double(maxSide) / max(image.extent.width, image.extent.height))
+        let resized = image.transformed(by: CGAffineTransform(scaleX: s, y: s))
+        let edited = edit(resized, adjustments)
+        guard let cg = context.createCGImage(edited, from: edited.extent, format: .RGBA8, colorSpace: display) else { throw AstroError.message("预览渲染失败") }
+        return cg
+    }
+    func export(image: CIImage, adjustments: Adjustments, kind: ExportKind, url: URL) throws {
+        let im = edit(image, adjustments)
+        switch kind {
+        case .tiff: try context.writeTIFFRepresentation(of: im, to: url, format: .RGBA16, colorSpace: display, options: [:])
+        case .png: try context.writePNGRepresentation(of: im, to: url, format: .RGBA16, colorSpace: display, options: [:])
+        case .jpeg: try context.writeJPEGRepresentation(of: im, to: url, colorSpace: display, options: [CIImageRepresentationOption(rawValue: kCGImageDestinationLossyCompressionQuality as String): 0.96])
+        case .heif: try context.writeHEIFRepresentation(of: im, to: url, format: .RGBA8, colorSpace: display, options: [CIImageRepresentationOption(rawValue: kCGImageDestinationLossyCompressionQuality as String): 0.95])
+        }
+    }
+    private func colorCube(_ bands: [HSLBand]) -> Data {
+        let dim = 24; var cube = [Float](); cube.reserveCapacity(dim * dim * dim * 4)
+        for b in 0..<dim { for g in 0..<dim { for r in 0..<dim {
+            let rgb = [Double(r), Double(g), Double(b)].map { $0 / Double(dim - 1) }
+            let hi = rgb.max()!, lo = rgb.min()!, d = hi - lo, l = (hi + lo) * 0.5
+            var h = 0.0
+            if d > 0 { if hi == rgb[0] { h = (rgb[1] - rgb[2]) / d }; if hi == rgb[1] { h = (rgb[2] - rgb[0]) / d + 2 }; if hi == rgb[2] { h = (rgb[0] - rgb[1]) / d + 4 }; h = (h / 6 + 1).truncatingRemainder(dividingBy: 1) }
+            let saturation = d == 0 ? 0 : d / max(1e-9, 1 - abs(2 * l - 1))
+            var dh = 0.0, ds = 0.0, dl = 0.0
+            for i in 0..<min(6, bands.count) { let diff = abs(h - Double(i) / 6); let weight = max(0, 1 - min(diff, 1 - diff) * 6); dh += bands[i].hue * weight / 360; ds += bands[i].saturation * weight; dl += bands[i].luminance * weight }
+            let hh = (h + dh + 1).truncatingRemainder(dividingBy: 1), ss = min(1, max(0, saturation * (1 + ds))), ll = min(1, max(0, l + dl * saturation * 0.25))
+            let c = (1 - abs(2 * ll - 1)) * ss, x = c * (1 - abs((hh * 6).truncatingRemainder(dividingBy: 2) - 1)), m = ll - c * 0.5
+            let part = min(5, Int(hh * 6)), triplets = [[c,x,0],[x,c,0],[0,c,x],[0,x,c],[x,0,c],[c,0,x]]
+            cube.append(contentsOf: triplets[part].map { Float($0 + m) }); cube.append(1)
+        } } }
+        return cube.withUnsafeBytes { Data($0) }
+    }
+}
