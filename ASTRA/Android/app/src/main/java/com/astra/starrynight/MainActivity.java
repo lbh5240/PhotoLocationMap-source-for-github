@@ -170,8 +170,8 @@ public final class MainActivity extends Activity {
         worker.execute(()->{
             try{
                 int count=NativeEngine.stack(caches,width,height,mode,sky,target.file(master).getPath(),(value,stage)->runOnUiThread(()->{progress.setProgress((int)(value*1000));setStatus(stage+" "+(int)(value*100)+"%");}));
-                String old=target.master;target.master=master;target.width=width;target.height=height;target.accepted=count;
-                try{target.save();}catch(Exception error){target.master=old;target.file(master).delete();throw error;}
+                String old=target.master;int oldWidth=target.width,oldHeight=target.height,oldAccepted=target.accepted;target.master=master;target.width=width;target.height=height;target.accepted=count;
+                try{target.save();}catch(Exception error){target.master=old;target.width=oldWidth;target.height=oldHeight;target.accepted=oldAccepted;target.file(master).delete();throw error;}
                 if(old!=null)target.file(old).delete();runOnUiThread(()->{finish();setStatus("合成完成 · "+count+" 帧 · "+width+"×"+height+"\n可以继续调色或导出");schedulePreview();});
             }catch(Exception|OutOfMemoryError error){runOnUiThread(()->{finish();setStatus("合成失败 · "+error.getMessage());});}
         });

@@ -26,6 +26,8 @@ jobs:
         with:
           gradle-version: '8.11.1'
       - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
       - name: Install native tools and fetch pinned RAW source
         run: |
           sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'cmake;3.22.1' 'ndk;27.3.13750724'
