@@ -76,7 +76,7 @@ struct PhotoCanvas: View {
                         Text("天空 / 地景").font(.caption2).padding(5).background(.black.opacity(0.65), in: Capsule()).position(x: geo.size.width/2, y: max(12, y-12))
                     }
                 } else {
-                    VStack(spacing: 12) { Image(systemName: "sparkles.rectangle.stack").font(.system(size: 42, weight: .ultraLight)); Text("让每一颗星，都更清晰").font(.headline); Text("导入 NEF、DNG 或 TIFF 开始处理").font(.caption).foregroundStyle(.secondary) }.foregroundStyle(.white.opacity(0.8))
+                    VStack(spacing: 12) { Image(systemName: "sparkles.rectangle.stack").font(.system(size: 42, weight: .ultraLight)); Text("让每一颗星，都更清晰").font(.headline); Text("从相册或文件导入照片开始处理").font(.caption).foregroundStyle(.secondary) }.foregroundStyle(.white.opacity(0.8))
                 }
                 if comparing { VStack { Badge(text: "调整前", color: .white); Spacer() }.padding(10) }
             }

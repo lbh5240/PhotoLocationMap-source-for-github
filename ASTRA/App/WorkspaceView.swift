@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 import UniformTypeIdentifiers
 
 private enum ToolPanel: String, CaseIterable {
@@ -9,6 +10,8 @@ struct WorkspaceView: View {
     @EnvironmentObject private var store: AppStore
     @State private var panel = ToolPanel.stack
     @State private var importing = false
+    @State private var pickingPhotos = false
+    @State private var selectedPhotos: [PhotosPickerItem] = []
     @State private var showFrames = false
     @State private var showExport = false
     @State private var showHelp = false
@@ -44,7 +47,7 @@ struct WorkspaceView: View {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Button(action: store.undo) { Image(systemName: "arrow.uturn.backward") }.disabled(store.busy || store.project?.undo.isEmpty != false).accessibilityLabel("撤销")
                 Menu {
-                    Button("导入照片", systemImage: "square.and.arrow.down") { importing = true }
+                    importActions
                     Button("管理照片", systemImage: "rectangle.stack") { showFrames = true }
                     Button("重命名工程", systemImage: "pencil") { name = store.project?.name ?? ""; showRename = true }
                     Button("重置调整", systemImage: "arrow.counterclockwise", action: store.reset)
@@ -58,6 +61,13 @@ struct WorkspaceView: View {
         .fileImporter(isPresented: $importing, allowedContentTypes: [.image, .rawImage], allowsMultipleSelection: true) { result in
             switch result { case .success(let urls): store.importFiles(urls); case .failure(let error): store.message = error.localizedDescription }
         }
+        .photosPicker(isPresented: $pickingPhotos, selection: $selectedPhotos, maxSelectionCount: 512,
+                      selectionBehavior: .ordered, matching: .images, preferredItemEncoding: .current)
+        .onChange(of: selectedPhotos) { _, items in
+            guard !items.isEmpty else { return }
+            selectedPhotos = []
+            store.importPhotos(items)
+        }
         .sheet(isPresented: $showFrames) { FramesView() }
         .sheet(isPresented: $showExport) { ExportView() }
         .sheet(isPresented: $showHelp) { HelpView() }
@@ -67,6 +77,10 @@ struct WorkspaceView: View {
             Button("保存") { let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines); if !trimmed.isEmpty { store.update { $0.name = trimmed }; store.flushSave() } }
             Button("取消", role: .cancel) {}
         }
+    }
+    @ViewBuilder private var importActions: some View {
+        Button("从相册导入", systemImage: "photo.on.rectangle.angled") { pickingPhotos = true }
+        Button("从文件导入", systemImage: "folder") { importing = true }
     }
     private func info(_ p: AstroProject) -> String {
         if let r = p.result { return "\(r.width) × \(r.height) · Float32" }
@@ -143,7 +157,9 @@ struct WorkspaceView: View {
                 Text("至少 5 帧启用稳健剔除；2–4 帧使用加权平均。").font(.caption2).foregroundStyle(.secondary)
             } else { Text("最大值混合会保留飞机与卫星光带，请在帧列表排除不需要的照片。").font(.caption).foregroundStyle(.secondary).padding(.vertical, 8) }
             HStack(spacing: 10) {
-                Button { importing = true } label: { Label("导入", systemImage: "plus").frame(maxWidth: .infinity).padding(.vertical, 4) }.buttonStyle(.bordered)
+                Menu { importActions } label: {
+                    Label("导入照片", systemImage: "plus").frame(maxWidth: .infinity).padding(.vertical, 4)
+                }.buttonStyle(.bordered)
                 Button(action: store.startStack) { Label("开始合成", systemImage: "sparkles").frame(maxWidth: .infinity).padding(.vertical, 4) }.buttonStyle(.borderedProminent).disabled(p.frames.filter(\.included).count < 2)
             }
         }.disabled(store.busy)

@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import CoreImage
+import PhotosUI
 
 @MainActor
 final class AppStore: ObservableObject {
@@ -104,35 +105,83 @@ final class AppStore: ObservableObject {
         let top = max(1, bins.max() ?? 1); return bins.map { log(1+$0) / log(1+top) }
     }
     func importFiles(_ urls: [URL]) {
-        guard !busy, let p = project, let repo = repository else { return }
-        flushSave(); busy = true; status = "导入照片"; progress = 0
-        let permissions = urls.map { $0.startAccessingSecurityScopedResource() }
+        importImages(urls.map(PhotoImportSource.file), title: "导入文件")
+    }
+    func importPhotos(_ items: [PhotosPickerItem]) {
+        importImages(items.map(PhotoImportSource.library), title: "从相册导入")
+    }
+    private func importImages(_ sources: [PhotoImportSource], title: String) {
+        guard !sources.isEmpty, !busy, let project, let repo = repository else { return }
+        flushSave()
+        busy = true
+        status = title
+        progress = 0
         Task {
             let result = await Task.detached(priority: .userInitiated) { () -> ([FrameRecord], [String]) in
-                defer { for (i, url) in urls.enumerated() where permissions[i] { url.stopAccessingSecurityScopedResource() } }
-                let pipeline = ImagePipeline(); var frames: [FrameRecord] = [], errors: [String] = []
-                for (i, url) in urls.enumerated() {
+                let pipeline = ImagePipeline()
+                var frames: [FrameRecord] = []
+                var errors: [String] = []
+                for (index, source) in sources.enumerated() {
                     do {
-                        let f = try autoreleasepool { () throws -> FrameRecord in
-                            let name = "Originals/\(UUID().uuidString).\(url.pathExtension.lowercased())", dest = repo.url(p, name)
-                            try FileManager.default.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
-                            try FileManager.default.copyItem(at: url, to: dest)
-                            do {
-                                let frame = try pipeline.metadata(dest, name: url.lastPathComponent, stored: name)
-                                let image = try pipeline.preview(image: pipeline.decode(dest), adjustments: .neutral, maxSide: 256)
-                                let thumb = repo.url(p, "Thumbs/\(frame.id.uuidString).jpg")
-                                try FileManager.default.createDirectory(at: thumb.deletingLastPathComponent(), withIntermediateDirectories: true)
-                                guard let data = UIImage(cgImage: image).jpegData(compressionQuality: 0.8) else { throw AstroError.message("无法生成缩略图") }
-                                try data.write(to: thumb); return frame
-                            } catch { try? FileManager.default.removeItem(at: dest); throw error }
-                        }; frames.append(f)
-                    } catch { errors.append(error.localizedDescription) }
-                    Task { @MainActor in self.progress = Double(i+1) / Double(urls.count) }
-                }; return (frames, errors)
+                        let frame = try await source.withFile { url in
+                            try autoreleasepool { try Self.copyFrame(from: url, to: project, repository: repo, pipeline: pipeline) }
+                        }
+                        frames.append(frame)
+                    } catch {
+                        errors.append("\(source.displayName(at: index))：\(error.localizedDescription)")
+                    }
+                    await MainActor.run { self.progress = Double(index + 1) / Double(sources.count) }
+                }
+                return (frames, errors)
             }.value
-            busy = false
-            update { $0.frames.append(contentsOf: result.0) }; flushSave(); requestPreview()
-            if !result.1.isEmpty { message = "已导入 \(result.0.count) 张。\n" + result.1.joined(separator: "\n") }
+            defer { busy = false }
+            do {
+                guard let index = projects.firstIndex(where: { $0.id == project.id }) else {
+                    throw AstroError.message("工程已不可用")
+                }
+                if !result.0.isEmpty {
+                    var committed = projects[index]
+                    committed.frames.append(contentsOf: result.0)
+                    committed.updated = .now
+                    try repo.save(committed)
+                    projects[index] = committed
+                    if selectedID == project.id { requestPreview() }
+                }
+                if !result.1.isEmpty {
+                    let details = result.1.prefix(4).joined(separator: "\n")
+                    let remaining = result.1.count > 4 ? "\n另有 \(result.1.count - 4) 张导入失败。" : ""
+                    message = "已导入 \(result.0.count) 张，失败 \(result.1.count) 张。\n\(details)\(remaining)"
+                }
+            } catch {
+                for frame in result.0 {
+                    try? FileManager.default.removeItem(at: repo.url(project, frame.fileName))
+                    try? FileManager.default.removeItem(at: repo.url(project, "Thumbs/\(frame.id.uuidString).jpg"))
+                }
+                message = "保存导入结果失败：\(error.localizedDescription)"
+            }
+        }
+    }
+    nonisolated private static func copyFrame(from url: URL, to project: AstroProject, repository: ProjectRepository, pipeline: ImagePipeline) throws -> FrameRecord {
+        let suffix = url.pathExtension.lowercased()
+        let fileName = UUID().uuidString + (suffix.isEmpty ? "" : ".\(suffix)")
+        let name = "Originals/\(fileName)"
+        let destination = repository.url(project, name)
+        let files = FileManager.default
+        try files.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+        do {
+            try files.copyItem(at: url, to: destination)
+            let frame = try pipeline.metadata(destination, name: url.lastPathComponent, stored: name)
+            let image = try pipeline.preview(image: pipeline.decode(destination), adjustments: .neutral, maxSide: 256)
+            let thumb = repository.url(project, "Thumbs/\(frame.id.uuidString).jpg")
+            try files.createDirectory(at: thumb.deletingLastPathComponent(), withIntermediateDirectories: true)
+            guard let data = UIImage(cgImage: image).jpegData(compressionQuality: 0.8) else {
+                throw AstroError.message("无法生成缩略图")
+            }
+            try data.write(to: thumb, options: .atomic)
+            return frame
+        } catch {
+            try? files.removeItem(at: destination)
+            throw error
         }
     }
     func startStack() {
