@@ -16,7 +16,7 @@ struct Transform {
 Analysis analyze(const float* rgba, int width, int height, double skyFraction=1);
 Transform align(const Analysis& reference, const Analysis& source);
 Transform liftToFullResolution(Transform proxyTransform, double proxyScale);
-struct Input { std::string path; Transform transform; double weight=1; };
+struct Input { std::string path; Transform transform; double weight=1; bool half=false; };
 enum class Mode { sky=0, landscape=1, trails=2 };
 struct Settings {
     Mode mode=Mode::sky;

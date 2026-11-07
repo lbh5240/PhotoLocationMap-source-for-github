@@ -10,6 +10,53 @@ struct StackNotice {
     let failed: Bool
 }
 
+enum PhotoFormatRequest {
+    case importing([PhotoImportSource], title: String)
+    case stacking
+
+    var title: String {
+        switch self {
+        case .importing: "选择本次导入的格式"
+        case .stacking: "选择本次堆栈的格式"
+        }
+    }
+}
+
+private actor PreviewWorker {
+    private var pipeline: ImagePipeline?
+    private var key: URL?
+    private var proxy: CIImage?
+    private var before: CGImage?
+
+    func render(project: AstroProject, repository: ProjectRepository) throws -> (CGImage, CGImage) {
+        try Task.checkCancellation()
+        return try autoreleasepool {
+            let url = repository.url(project, project.result?.fileName ?? project.frames[0].fileName)
+            let pipeline = self.pipeline ?? ImagePipeline()
+            self.pipeline = pipeline
+            if key != url || proxy == nil || before == nil {
+                let source = try project.result.map { try pipeline.master($0, repository: repository, project: project) }
+                    ?? pipeline.decode(url)
+                let image = try pipeline.previewSource(source)
+                before = try pipeline.preview(image: image, adjustments: .neutral)
+                proxy = image
+                key = url
+            }
+            try Task.checkCancellation()
+            guard let proxy, let before else { throw AstroError.message("预览渲染失败") }
+            let after = project.adjustments == .neutral ? before : try pipeline.preview(image: proxy, adjustments: project.adjustments)
+            return (after, before)
+        }
+    }
+
+    func reset() {
+        key = nil
+        proxy = nil
+        before = nil
+        pipeline = nil
+    }
+}
+
 @MainActor
 final class AppStore: ObservableObject {
     @Published private(set) var projects: [AstroProject] = []
@@ -24,18 +71,20 @@ final class AppStore: ObservableObject {
     @Published private(set) var stackNotice: StackNotice?
     @Published var message: String?
     @Published var sharedURL: URL?
+    @Published var formatRequest: PhotoFormatRequest?
     private var repository: ProjectRepository?
     private var cancelToken: ASCancelToken?
     private var saveTask: Task<Void, Never>?
     private var previewTask: Task<Void, Never>?
     private var previewGeneration = 0
+    private let previewWorker = PreviewWorker()
     var project: AstroProject? { projects.first { $0.id == selectedID } }
     init() {
         do { let repo = try ProjectRepository(); repository = repo; projects = try repo.list() }
         catch { message = error.localizedDescription }
     }
     func select(_ id: UUID?) {
-        flushSave(); selectedID = id; preview = nil; beforePreview = nil; requestPreview()
+        flushSave(); selectedID = id; preview = nil; beforePreview = nil; histogram = []; requestPreview()
     }
     func create() {
         guard !busy, let repo = repository else { return }
@@ -76,11 +125,6 @@ final class AppStore: ObservableObject {
         guard let repo = repository, let p = project else { return nil }
         return repo.url(p, "Thumbs/\(frame.id.uuidString).jpg")
     }
-    func sourceImage(_ p: AstroProject, _ repo: ProjectRepository, _ pipeline: ImagePipeline) throws -> CIImage {
-        if let result = p.result { return try pipeline.master(result, repository: repo, project: p) }
-        guard let frame = p.frames.first else { throw AstroError.message("请先导入照片") }
-        return try pipeline.decode(repo.url(p, frame.fileName))
-    }
     func requestPreview() {
         previewTask?.cancel(); previewGeneration += 1
         guard let p = project, !p.frames.isEmpty, let repo = repository else { return }
@@ -88,18 +132,12 @@ final class AppStore: ObservableObject {
         previewTask = Task {
             try? await Task.sleep(for: .milliseconds(140)); if Task.isCancelled { return }
             do {
-                let rendered = try await Task.detached(priority: .userInitiated) { () -> (CGImage, CGImage, [Double]) in
-                    let pipeline = ImagePipeline()
-                    let source: CIImage
-                    if let result = p.result { source = try pipeline.master(result, repository: repo, project: p) }
-                    else { source = try pipeline.decode(repo.url(p, p.frames[0].fileName)) }
-                    let after = try pipeline.preview(image: source, adjustments: p.adjustments)
-                    let before = try pipeline.preview(image: source, adjustments: .neutral)
-                    return (after, before, Self.makeHistogram(after))
-                }.value
+                let rendered = try await previewWorker.render(project: p, repository: repo)
                 guard !Task.isCancelled, generation == previewGeneration, selectedID == p.id else { return }
-                preview = UIImage(cgImage: rendered.0); beforePreview = UIImage(cgImage: rendered.1); histogram = rendered.2
-            } catch { if generation == previewGeneration { message = error.localizedDescription } }
+                preview = UIImage(cgImage: rendered.0)
+                beforePreview = UIImage(cgImage: rendered.1)
+                histogram = Self.makeHistogram(rendered.0)
+            } catch { if !Task.isCancelled, generation == previewGeneration { message = error.localizedDescription } }
         }
     }
     nonisolated private static func makeHistogram(_ image: CGImage) -> [Double] {
@@ -113,26 +151,46 @@ final class AppStore: ObservableObject {
         let top = max(1, bins.max() ?? 1); return bins.map { log(1+$0) / log(1+top) }
     }
     func importFiles(_ urls: [URL]) {
-        importImages(urls.map(PhotoImportSource.file), title: "导入文件")
+        prepareImport(urls.map(PhotoImportSource.file), title: "导入文件")
     }
     func importPhotos(_ items: [PhotosPickerItem]) {
-        importImages(items.map(PhotoImportSource.library), title: "从相册导入")
+        prepareImport(items.map(PhotoImportSource.library), title: "从相册导入")
     }
-    private func importImages(_ sources: [PhotoImportSource], title: String) {
+    private func prepareImport(_ sources: [PhotoImportSource], title: String) {
+        guard !sources.isEmpty, !busy, project != nil else { return }
+        let formats = Set(sources.flatMap { $0.formats })
+        if formats.count > 1 {
+            formatRequest = .importing(sources, title: title)
+        } else {
+            importImages(sources, title: title, format: formats.first)
+        }
+    }
+    func applyFormat(_ format: PhotoFormat, to request: PhotoFormatRequest) {
+        formatRequest = nil
+        switch request {
+        case .importing(let sources, let title):
+            importImages(sources.filter { $0.formats.contains(format) }, title: title, format: format)
+        case .stacking:
+            startStack(format: format)
+        }
+    }
+    private func importImages(_ sources: [PhotoImportSource], title: String, format: PhotoFormat?) {
         guard !sources.isEmpty, !busy, let project, let repo = repository else { return }
         flushSave()
+        previewTask?.cancel()
         busy = true
         status = title
         progress = 0
         Task {
+            await previewWorker.reset()
             let result = await Task.detached(priority: .userInitiated) { () -> ([FrameRecord], [String]) in
                 let pipeline = ImagePipeline()
                 var frames: [FrameRecord] = []
                 var errors: [String] = []
                 for (index, source) in sources.enumerated() {
                     do {
-                        let frame = try await source.withFile { url in
-                            try autoreleasepool { try Self.copyFrame(from: url, to: project, repository: repo, pipeline: pipeline) }
+                        let frame = try await source.withFile(format: format) { url, move in
+                            try autoreleasepool { try Self.copyFrame(from: url, move: move, to: project, repository: repo, pipeline: pipeline) }
                         }
                         frames.append(frame)
                     } catch {
@@ -169,7 +227,7 @@ final class AppStore: ObservableObject {
             }
         }
     }
-    nonisolated private static func copyFrame(from url: URL, to project: AstroProject, repository: ProjectRepository, pipeline: ImagePipeline) throws -> FrameRecord {
+    nonisolated private static func copyFrame(from url: URL, move: Bool, to project: AstroProject, repository: ProjectRepository, pipeline: ImagePipeline) throws -> FrameRecord {
         let suffix = url.pathExtension.lowercased()
         let fileName = UUID().uuidString + (suffix.isEmpty ? "" : ".\(suffix)")
         let name = "Originals/\(fileName)"
@@ -177,9 +235,11 @@ final class AppStore: ObservableObject {
         let files = FileManager.default
         try files.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
         do {
-            try files.copyItem(at: url, to: destination)
-            let frame = try pipeline.metadata(destination, name: url.lastPathComponent, stored: name)
-            let image = try pipeline.preview(image: pipeline.decode(destination), adjustments: .neutral, maxSide: 256)
+            if move { try files.moveItem(at: url, to: destination) }
+            else { try files.copyItem(at: url, to: destination) }
+            let decoded = try pipeline.decode(destination)
+            let frame = pipeline.metadata(destination, image: decoded, name: url.lastPathComponent, stored: name)
+            let image = try pipeline.preview(image: decoded, adjustments: .neutral, maxSide: 256)
             let thumb = repository.url(project, "Thumbs/\(frame.id.uuidString).jpg")
             try files.createDirectory(at: thumb.deletingLastPathComponent(), withIntermediateDirectories: true)
             guard let data = UIImage(cgImage: image).jpegData(compressionQuality: 0.8) else {
@@ -192,11 +252,19 @@ final class AppStore: ObservableObject {
             throw error
         }
     }
-    func startStack() {
+    func prepareStack() {
+        guard let project, !busy else { return }
+        if StackSelection.formats(in: project).count > 1 {
+            formatRequest = .stacking
+        } else {
+            startStack(format: nil)
+        }
+    }
+    private func startStack(format: PhotoFormat?) {
         guard !busy, var p = project, let repo = repository else { return }
         stackNotice = nil
         do {
-            try StackWorker.validateSelection(p)
+            try StackWorker.validateSelection(p, format: format)
             saveTask?.cancel()
             p.jobInProgress = true
             try repo.save(p)
@@ -205,14 +273,16 @@ final class AppStore: ObservableObject {
             return
         }
         if let i = projects.firstIndex(where: { $0.id == p.id }) { projects[i] = p }
+        previewTask?.cancel()
         busy = true; canCancel = true; progress = 0; status = "准备合成"; let token = ASCancelToken(); cancelToken = token
         let backgroundID = UIApplication.shared.beginBackgroundTask(withName: "ASTRA Stack") { token.cancel() }
         UIApplication.shared.isIdleTimerDisabled = true
         Task {
             do {
+                await previewWorker.reset()
                 let work = try await Task.detached(priority: .userInitiated) {
                     var last = Date.distantPast
-                    return try StackWorker.run(project: p, repository: repo, token: token) { value, label in
+                    return try StackWorker.run(project: p, repository: repo, format: format, token: token) { value, label in
                         if Date.now.timeIntervalSince(last) < 0.12 && value < 1 { return }; last = .now
                         Task { @MainActor in
                             guard self.cancelToken === token, !token.isCancelled() else { return }
@@ -226,7 +296,11 @@ final class AppStore: ObservableObject {
                 var committed = projects[index]
                 committed.frames = work.frames; committed.result = work.result; committed.jobInProgress = false; committed.updated = .now
                 // Persist the new reference before removing the old master.
-                try repo.save(committed)
+                do { try repo.save(committed) }
+                catch {
+                    try? FileManager.default.removeItem(at: repo.url(p, work.result.fileName))
+                    throw error
+                }
                 projects[index] = committed
                 if let old, old != work.result.fileName { try? FileManager.default.removeItem(at: repo.url(p, old)) }
                 requestPreview()

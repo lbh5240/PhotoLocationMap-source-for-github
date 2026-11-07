@@ -9,6 +9,21 @@ enum PhotoImportSource: Sendable {
     case file(URL)
     case library(PhotosPickerItem)
 
+    var formats: Set<PhotoFormat> {
+        switch self {
+        case .file(let url):
+            let suffix = url.pathExtension.lowercased()
+            let raw = StackSelection.rawExtensions.contains(suffix) || UTType(filenameExtension: suffix)?.conforms(to: .rawImage) == true
+            return [raw ? .raw : .processed]
+        case .library(let item):
+            let types = item.supportedContentTypes
+            let raw = types.contains { $0.conforms(to: .rawImage) }
+            let processed = types.contains { $0.conforms(to: .image) && $0 != .image && !$0.conforms(to: .rawImage) }
+            if raw { return processed ? [.raw, .processed] : [.raw] }
+            return [.processed]
+        }
+    }
+
     func displayName(at index: Int) -> String {
         switch self {
         case .file(let url): url.lastPathComponent
@@ -16,18 +31,30 @@ enum PhotoImportSource: Sendable {
         }
     }
 
-    func withFile<Result>(_ operation: (URL) throws -> Result) async throws -> Result {
+    func withFile<Result>(format: PhotoFormat?, _ operation: (URL, Bool) throws -> Result) async throws -> Result {
         switch self {
         case .file(let url):
             let access = url.startAccessingSecurityScopedResource()
             defer { if access { url.stopAccessingSecurityScopedResource() } }
-            return try operation(url)
+            return try operation(url, false)
         case .library(let item):
-            guard let photo = try await item.loadTransferable(type: SelectedPhotoFile.self) else {
-                throw AstroError.message("相册未能提供图像文件。若照片存于 iCloud，请下载后重试。")
+            let photo: SelectedPhotoFile?
+            let requested = format ?? (formats == [.raw] ? .raw : .processed)
+            if requested == .raw {
+                photo = try await item.loadTransferable(type: RAWPhotoFile.self)?.file
+            } else if item.supportedContentTypes.contains(where: { $0.conforms(to: .jpeg) }) {
+                photo = try await item.loadTransferable(type: JPEGPhotoFile.self)?.file
+            } else {
+                photo = try await item.loadTransferable(type: SelectedPhotoFile.self)
+            }
+            guard let photo else {
+                throw AstroError.message("相册未提供所选格式。若照片存于 iCloud，请下载后重试，也可从「文件」导入原件。")
             }
             defer { try? FileManager.default.removeItem(at: photo.directory) }
-            return try operation(photo.url)
+            guard photo.format == requested else {
+                throw AstroError.message("相册提供的格式与所选格式不同，请从「文件」导入需要的原件。")
+            }
+            return try operation(photo.url, true)
         }
     }
 }
@@ -35,30 +62,51 @@ enum PhotoImportSource: Sendable {
 private struct SelectedPhotoFile: Transferable, Sendable {
     let directory: URL
     let url: URL
+    let format: PhotoFormat
 
     static var transferRepresentation: some TransferRepresentation {
-        FileRepresentation(importedContentType: .image) { received in
-            let files = FileManager.default
-            let directory = files.temporaryDirectory.appendingPathComponent("ASTRA-Photo-\(UUID())", isDirectory: true)
-            try files.createDirectory(at: directory, withIntermediateDirectories: false)
-            do {
-                let source = received.file
-                var name = source.lastPathComponent
-                let suffix = UTType(filenameExtension: source.pathExtension)
-                if suffix?.conforms(to: .image) != true,
-                   let imageSource = CGImageSourceCreateWithURL(source as CFURL, nil),
-                   let identifier = CGImageSourceGetType(imageSource),
-                   let detectedSuffix = UTType(identifier as String)?.preferredFilenameExtension {
-                    name = source.deletingPathExtension().lastPathComponent + "." + detectedSuffix
-                }
-                let copy = directory.appendingPathComponent(name)
-                // The system's source URL may expire as soon as this callback returns.
-                try files.copyItem(at: source, to: copy)
-                return SelectedPhotoFile(directory: directory, url: copy)
-            } catch {
-                try? files.removeItem(at: directory)
-                throw error
-            }
+        FileRepresentation(importedContentType: .image) { try stage($0.file) }
+    }
+
+    static func stage(_ source: URL) throws -> Self {
+        let files = FileManager.default
+        let directory = files.temporaryDirectory.appendingPathComponent("ASTRA-Photo-\(UUID())", isDirectory: true)
+        let imageSource = CGImageSourceCreateWithURL(source as CFURL, nil)
+        let detected = imageSource.flatMap { CGImageSourceGetType($0) }.flatMap { UTType($0 as String) }
+        let suffix = UTType(filenameExtension: source.pathExtension)
+        let format: PhotoFormat = detected?.conforms(to: .rawImage) == true ||
+            StackSelection.rawExtensions.contains(source.pathExtension.lowercased()) ? .raw : .processed
+        let name: String
+        if let detected, let ext = detected.preferredFilenameExtension,
+           suffix?.identifier != detected.identifier {
+            name = source.deletingPathExtension().lastPathComponent + "." + ext
+        } else {
+            name = source.lastPathComponent
         }
+        try files.createDirectory(at: directory, withIntermediateDirectories: false)
+        do {
+            let copy = directory.appendingPathComponent(name)
+            // Keep a link to the system file where possible; its provider URL can expire.
+            do { try files.linkItem(at: source, to: copy) }
+            catch { try files.copyItem(at: source, to: copy) }
+            return SelectedPhotoFile(directory: directory, url: copy, format: format)
+        } catch {
+            try? files.removeItem(at: directory)
+            throw error
+        }
+    }
+}
+
+private struct RAWPhotoFile: Transferable, Sendable {
+    let file: SelectedPhotoFile
+    static var transferRepresentation: some TransferRepresentation {
+        FileRepresentation(importedContentType: .rawImage) { Self(file: try SelectedPhotoFile.stage($0.file)) }
+    }
+}
+
+private struct JPEGPhotoFile: Transferable, Sendable {
+    let file: SelectedPhotoFile
+    static var transferRepresentation: some TransferRepresentation {
+        FileRepresentation(importedContentType: .jpeg) { Self(file: try SelectedPhotoFile.stage($0.file)) }
     }
 }

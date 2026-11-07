@@ -60,6 +60,20 @@ int main(int argc,char** argv) {
         double ratio=std::sqrt(variance/(w*h))/std::sqrt(inputVar/(15*w*h));check(ratio<.4&&std::abs(result[(30*w+40)*4]-.25)<.05,"noise reduction and sigma rejection");
         std::cout<<"PASS real pixel stack: noise ratio "<<ratio<<", outlier="<<result[(30*w+40)*4]<<"\n";
         cfg.mode=Mode::trails;stack(ins,w,h,cfg,dir+"/trails",cancel,[](double){});auto trail=load(dir+"/trails",w,h);check(trail[(30*w+40)*4]==8,"trails maximum blend");std::cout<<"PASS trails maximum\n";
+        std::vector<uint16_t> halfPixels(size_t(w)*h*4);
+        for(size_t i=0;i<halfPixels.size();i+=4) {
+            halfPixels[i]=0x3400; halfPixels[i+1]=0xB800; halfPixels[i+2]=0x0001; halfPixels[i+3]=0x3C00;
+        }
+        const auto halfPath=dir+"/half";
+        { std::ofstream file(halfPath,std::ios::binary); file.write(reinterpret_cast<const char*>(halfPixels.data()),halfPixels.size()*sizeof(uint16_t)); }
+        cfg.mode=Mode::sky;
+        stack({{halfPath,{},1,true},{halfPath,{},1,true}},w,h,cfg,output+"-half",cancel,[](double){});
+        const auto halfResult=load(output+"-half",w,h);
+        for(size_t i=0;i<halfResult.size();i+=4) {
+            check(halfResult[i]==0.25f && halfResult[i+1]==-0.5f &&
+                  halfResult[i+2]==std::ldexp(1.0f,-24) && halfResult[i+3]==1,"half cache preserves signed and very dark linear values");
+        }
+        std::cout<<"PASS half precision cache to Float32 output\n";
         // A +3 pixel reference->source shift must sample source x+3, not x-3.
         std::vector<Input> shifted;for(int f=0;f<5;f++){std::vector<float> v(size_t(w)*h*4,1);for(int y=0;y<h;y++)for(int x=0;x<w;x++)for(int c=0;c<3;c++)v[(y*w+x)*4+c]=float(x-f)/w;auto p=dir+"/s"+std::to_string(f);save(p,v);Transform tr;tr.tx=f;shifted.push_back({p,tr,1});}
         cfg.mode=Mode::sky;stack(shifted,w,h,cfg,dir+"/shift",cancel,[](double){});auto sh=load(dir+"/shift",w,h);check(std::abs(sh[(40*w+30)*4]-30.0/w)<1e-6,"warp direction");check(sh[(40*w+w-1)*4+3]==0,"partial coverage alpha");

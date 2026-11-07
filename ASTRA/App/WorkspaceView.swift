@@ -76,6 +76,16 @@ struct WorkspaceView: View {
             selectedPhotos = []
             store.importPhotos(items)
         }
+        .confirmationDialog(store.formatRequest?.title ?? "选择照片格式",
+                            isPresented: Binding(get: { store.formatRequest != nil }, set: { if !$0 { store.formatRequest = nil } }),
+                            titleVisibility: .visible, presenting: store.formatRequest) { request in
+            ForEach(PhotoFormat.allCases, id: \.self) { format in
+                Button(format.rawValue) { store.applyFormat(format, to: request) }
+            }
+            Button("取消", role: .cancel) {}
+        } message: { _ in
+            Text("仅使用所选格式。使用 JPEG 可节省空间，使用 RAW 可保留更多调色余量。")
+        }
         .sheet(isPresented: $showFrames) { FramesView() }
         .sheet(isPresented: $showExport) { ExportView() }
         .sheet(isPresented: $showHelp) { HelpView() }
@@ -274,6 +284,18 @@ struct WorkspaceView: View {
                 }
             }
             Text(project.configuration.mode.subtitle).font(.caption2).foregroundStyle(.secondary)
+            Menu {
+                Button { store.update { $0.configuration.halfResolution = false } } label: {
+                    Label("原尺寸", systemImage: project.configuration.halfResolution == true ? "photo" : "checkmark")
+                }
+                Button { store.update { $0.configuration.halfResolution = true } } label: {
+                    Label("省空间 · 宽高减半", systemImage: project.configuration.halfResolution == true ? "checkmark" : "photo")
+                }
+            } label: {
+                Label(project.configuration.halfResolution == true ? "省空间 · 宽高减半" : "堆栈分辨率 · 原尺寸",
+                      systemImage: "arrow.up.left.and.arrow.down.right")
+                    .font(.caption.weight(.medium)).frame(maxWidth: .infinity, alignment: .leading)
+            }.buttonStyle(.bordered)
             if project.configuration.mode == .landscape {
                 PrecisionRuler(title: "天空占比", value: Binding(get: { project.configuration.skyFraction }, set: { value in
                     store.update { $0.configuration.skyFraction = value }
@@ -295,7 +317,7 @@ struct WorkspaceView: View {
             Menu { importActions } label: {
                 Label("导入照片", systemImage: "plus").frame(maxWidth: .infinity, minHeight: 27)
             }.buttonStyle(.bordered)
-            Button(action: store.startStack) {
+            Button(action: store.prepareStack) {
                 Label("开始合成", systemImage: "sparkles").frame(maxWidth: .infinity, minHeight: 27)
             }.buttonStyle(.borderedProminent).tint(EditorStyle.accent).foregroundStyle(.black)
                 .disabled(project.frames.filter(\.included).count < 2)

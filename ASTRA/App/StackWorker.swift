@@ -1,4 +1,5 @@
 import Foundation
+import CoreImage
 
 struct StackWorkResult {
     var frames: [FrameRecord]
@@ -6,8 +7,8 @@ struct StackWorkResult {
     var formatNote: String?
 }
 enum StackWorker {
-    static func validateSelection(_ project: AstroProject) throws {
-        let selected = try StackSelection.indices(in: project).map { project.frames[$0] }
+    static func validateSelection(_ project: AstroProject, format: PhotoFormat? = nil) throws {
+        let selected = try StackSelection.indices(in: project, format: format).map { project.frames[$0] }
         guard selected.count >= 2 else { throw AstroError.message("请至少选择两张照片。") }
         guard selected.count <= 512 else { throw AstroError.message("单次最多合成 512 张照片。") }
         let first = selected[0]
@@ -16,28 +17,28 @@ enum StackWorker {
         }
     }
 
-    static func run(project: AstroProject, repository: ProjectRepository, token: ASCancelToken, progress: @escaping (Double, String) -> Void) throws -> StackWorkResult {
-        try validateSelection(project)
+    static func run(project: AstroProject, repository: ProjectRepository, format: PhotoFormat?, token: ASCancelToken, progress: @escaping (Double, String) -> Void) throws -> StackWorkResult {
+        try validateSelection(project, format: format)
         let pipeline = ImagePipeline(), cfg = project.configuration
         var frames = project.frames
-        let selected = try StackSelection.indices(in: project)
+        let selected = try StackSelection.indices(in: project, format: format)
         let selectedSet = Set(selected)
         let grouped = frames.indices.filter { frames[$0].included && !selectedSet.contains($0) }
-        let formatNote = grouped.isEmpty ? nil : StackSelection.isRaw(frames[selected[0]])
-            ? "JPEG+RAW 已分组，本次优先使用 RAW，\(grouped.count) 张 JPEG 未参与。"
-            : "本次使用 JPEG 图片组，单张 RAW 未参与。"
+        let formatNote = grouped.isEmpty ? nil : "本次只使用所选格式，另有 \(grouped.count) 张未参与。"
         for index in grouped { frames[index].rejection = formatNote }
-        let w = frames[selected[0]].width, h = frames[selected[0]].height
+        let divisor = cfg.halfResolution == true ? 2 : 1
+        let w = frames[selected[0]].width / divisor, h = frames[selected[0]].height / divisor
+        try repository.clearCache(project)
         let cache = repository.url(project, "Cache")
         try FileManager.default.createDirectory(at: cache, withIntermediateDirectories: true)
-        func cacheURL(_ i: Int) -> URL { cache.appendingPathComponent(frames[i].id.uuidString + ".rgba") }
-        let byteCount = Int64(w) * Int64(h) * 16
-        let missing = selected.filter { (try? cacheURL($0).resourceValues(forKeys: [.fileSizeKey]).fileSize) != Int(byteCount) }.count
+        defer { try? repository.clearCache(project) }
+        func cacheURL(_ i: Int) -> URL { cache.appendingPathComponent(frames[i].id.uuidString + ".rgba16") }
+        let pixels = Int64(w) * Int64(h)
         let capacities = try? repository.root.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey, .volumeAvailableCapacityKey])
         let available = capacities?.volumeAvailableCapacityForImportantUsage ?? capacities?.volumeAvailableCapacity.map(Int64.init)
-        let needed = Int64(missing + 1) * byteCount + 64 * 1024 * 1024
+        let needed = pixels * (Int64(selected.count) * 8 + 16) + 64 * 1024 * 1024
         if let available, available < needed {
-            throw AstroError.message("当前可用 \(ByteCountFormatter.string(fromByteCount: available, countStyle: .file))，本次需要约 \(ByteCountFormatter.string(fromByteCount: needed, countStyle: .file))。请清理空间或减少选帧。")
+            throw AstroError.message("当前可用 \(ByteCountFormatter.string(fromByteCount: available, countStyle: .file))，本次需要约 \(ByteCountFormatter.string(fromByteCount: needed, countStyle: .file))。请清理空间、减少选帧或选择省空间模式。")
         }
         var analyses: [Int: [AnyHashable: Any]] = [:]
         var proxyScales: [Int: Double] = [:]
@@ -45,14 +46,17 @@ enum StackWorker {
             if token.isCancelled() { throw CancellationError() }
             try autoreleasepool {
                 progress(Double(step) / Double(selected.count) * 0.45, "解码与星点分析 \(step + 1) / \(selected.count)")
-                let image = try pipeline.decode(repository.url(project, frames[i].fileName))
+                let original = try pipeline.decode(repository.url(project, frames[i].fileName))
+                let scale = 1 / CGFloat(divisor)
+                let image = original.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+                    .cropped(to: CGRect(x: 0, y: 0, width: w, height: h))
                 let proxy = pipeline.proxy(image)
                 let analysis = AstroBridge.analyze(pixels: proxy.data, width: proxy.width, height: proxy.height, skyFraction: cfg.mode == .landscape ? cfg.skyFraction : 1)
                 analyses[i] = analysis; proxyScales[i] = proxy.scale
                 frames[i].starCount = (analysis["stars"] as? [Any])?.count ?? 0
                 frames[i].quality = (analysis["quality"] as? NSNumber)?.doubleValue ?? 0
                 frames[i].rejection = nil; frames[i].registrationRMS = nil
-                if (try? cacheURL(i).resourceValues(forKeys: [.fileSizeKey]).fileSize) != Int(byteCount) {
+                if cfg.mode == .trails || (frames[i].starCount ?? 0) >= 8 {
                     try pipeline.cache(image, at: cacheURL(i), token: token)
                 }
             }
@@ -72,14 +76,18 @@ enum StackWorker {
                     continue
                 }
                 t = AstroBridge.align(reference: analyses[reference]!, source: analyses[i]!, scale: proxyScales[i]!)
-                if let error = t["error"] as? String { frames[i].rejection = error; continue }
+                if let error = t["error"] as? String {
+                    frames[i].rejection = error
+                    try? FileManager.default.removeItem(at: cacheURL(i))
+                    continue
+                }
             }
             let a = (t["a"] as? NSNumber)?.doubleValue ?? 1, b = (t["b"] as? NSNumber)?.doubleValue ?? 0
             let tx = ((t["tx"] as? NSNumber)?.doubleValue ?? 0)
             let ty = ((t["ty"] as? NSNumber)?.doubleValue ?? 0)
             frames[i].registrationRMS = ((t["rms"] as? NSNumber)?.doubleValue ?? 0)
             // Geometry uses pixel-center coordinates at each scale.
-            accepted.append(["path": cacheURL(i).path, "a": a, "b": b, "tx": tx, "ty": ty, "weight": max(0.01, min(100, frames[i].quality ?? 1))])
+            accepted.append(["path": cacheURL(i).path, "half": true, "a": a, "b": b, "tx": tx, "ty": ty, "weight": max(0.01, min(100, frames[i].quality ?? 1))])
         }
         guard accepted.count >= 2 else { throw AstroError.message("选中的 \(selected.count) 张照片中只有 \(accepted.count) 张对齐成功。请使用同一片天空的照片，排除云层、拖尾或构图差异过大的帧。") }
         let fileName = "Master-\(UUID().uuidString).rgba"

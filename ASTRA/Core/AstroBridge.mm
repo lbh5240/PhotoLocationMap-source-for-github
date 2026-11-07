@@ -28,7 +28,7 @@ static astra::Analysis unpack(NSDictionary *d) {
         for(NSDictionary *d in frames) {
             astra::Transform t;
             t.a=[d[@"a"] doubleValue];t.b=[d[@"b"] doubleValue];t.tx=[d[@"tx"] doubleValue];t.ty=[d[@"ty"] doubleValue];
-            inputs.push_back({[d[@"path"] UTF8String],t,[d[@"weight"] doubleValue]});
+            inputs.push_back({[d[@"path"] UTF8String],t,[d[@"weight"] doubleValue],[d[@"half"] boolValue] != NO});
         }
         astra::Settings cfg;cfg.mode=(astra::Mode)mode;cfg.sigma=sigma;cfg.skyFraction=sky;cfg.feather=feather;
         astra::stack(inputs,(int)w,(int)h,cfg,[destination UTF8String],token->_flag,[&](double p){progress(p);});return nil;

@@ -15,9 +15,8 @@ final class ImagePipeline {
     }
     func decode(_ url: URL) throws -> CIImage {
         let ext = url.pathExtension.lowercased()
-        let rawExtensions = ["nef", "nrw", "dng", "arw", "cr2", "cr3", "raf", "orf", "rw2"]
         let image: CIImage
-        if rawExtensions.contains(ext) {
+        if StackSelection.rawExtensions.contains(ext) {
             guard let raw = CIRAWFilter(imageURL: url) else { throw AstroError.message("系统无法解码 RAW：\(url.lastPathComponent)。请检查机型、压缩类型和系统 RAW 支持；不会使用内嵌 JPEG 替代。") }
             raw.exposure = 0; raw.baselineExposure = 0
             raw.isDraftModeEnabled = false; raw.scaleFactor = 1
@@ -37,10 +36,7 @@ final class ImagePipeline {
         guard e.width.isFinite, e.height.isFinite, e.width >= 16, e.height >= 16, e.width <= 30000, e.height <= 30000 else { throw AstroError.message("图片尺寸不支持") }
         return image.transformed(by: CGAffineTransform(translationX: -e.minX, y: -e.minY)).cropped(to: CGRect(origin: .zero, size: e.size))
     }
-    func metadata(_ url: URL, name: String, stored: String) throws -> FrameRecord {
-        // Decoding outputImage is lazy; a small render verifies the actual RAW decoder.
-        let image = try decode(url)
-        _ = try preview(image: image, adjustments: .neutral, maxSide: 256)
+    func metadata(_ url: URL, image: CIImage, name: String, stored: String) -> FrameRecord {
         var f = FrameRecord(name: name, fileName: stored)
         f.width = Int(image.extent.width); f.height = Int(image.extent.height)
         if let source = CGImageSourceCreateWithURL(url as CFURL, nil), let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any] {
@@ -61,22 +57,33 @@ final class ImagePipeline {
         return (data, w, h, scale)
     }
     func cache(_ image: CIImage, at url: URL, token: ASCancelToken) throws {
-        let w = Int(image.extent.width), h = Int(image.extent.height), temp = url.appendingPathExtension("partial")
-        guard FileManager.default.createFile(atPath: temp.path, contents: nil) else { throw AstroError.message("无法创建解码缓存") }
-        let handle = try FileHandle(forWritingTo: temp)
-        do {
-            for y in stride(from: 0, to: h, by: 128) {
-                if token.isCancelled() { throw CancellationError() }
-                try autoreleasepool {
-                    let rows = min(128, h - y); var data = Data(count: w * rows * 16)
-                    data.withUnsafeMutableBytes { p in context.render(image, toBitmap: p.baseAddress!, rowBytes: w * 16, bounds: CGRect(x: 0, y: y, width: w, height: rows), format: .RGBAf, colorSpace: linear) }
-                    try handle.write(contentsOf: data)
+        let w = Int(image.extent.width), h = Int(image.extent.height)
+        guard FileManager.default.createFile(atPath: url.path, contents: nil) else {
+            throw AstroError.message("无法创建临时堆栈文件")
+        }
+        let handle = try FileHandle(forWritingTo: url)
+        defer { try? handle.close() }
+        for y in stride(from: 0, to: h, by: 128) {
+            if token.isCancelled() { throw CancellationError() }
+            try autoreleasepool {
+                let rows = min(128, h - y)
+                var data = Data(count: w * rows * 8)
+                data.withUnsafeMutableBytes { p in
+                    context.render(image, toBitmap: p.baseAddress!, rowBytes: w * 8,
+                                   bounds: CGRect(x: 0, y: y, width: w, height: rows), format: .RGBAh, colorSpace: linear)
                 }
+                try handle.write(contentsOf: data)
             }
-            try handle.synchronize(); try handle.close()
-            if FileManager.default.fileExists(atPath: url.path) { try FileManager.default.removeItem(at: url) }
-            try FileManager.default.moveItem(at: temp, to: url)
-        } catch { try? handle.close(); try? FileManager.default.removeItem(at: temp); throw error }
+        }
+        try handle.close()
+    }
+    func previewSource(_ image: CIImage) throws -> CIImage {
+        let scale = min(1, 1600 / max(image.extent.width, image.extent.height))
+        let resized = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        guard let rendered = context.createCGImage(resized, from: resized.extent, format: .RGBAh, colorSpace: linear) else {
+            throw AstroError.message("预览渲染失败")
+        }
+        return CIImage(cgImage: rendered, options: [.colorSpace: linear])
     }
     func master(_ result: StackResult, repository: ProjectRepository, project: AstroProject) throws -> CIImage {
         let url = repository.url(project, result.fileName)
@@ -86,12 +93,13 @@ final class ImagePipeline {
     }
     func edit(_ source: CIImage, _ a: Adjustments) -> CIImage {
         let extent = source.extent
-        var im = source.applyingFilter("CIExposureAdjust", parameters: [kCIInputEVKey: a.exposure])
+        var im = source
+        if a.exposure != 0 { im = im.applyingFilter("CIExposureAdjust", parameters: [kCIInputEVKey: a.exposure]) }
         if a.warmth != 0 || a.tint != 0 { im = im.applyingFilter("CITemperatureAndTint", parameters: ["inputNeutral": CIVector(x: 6500 + a.warmth * 25, y: a.tint), "inputTargetNeutral": CIVector(x: 6500, y: 0)]) }
         if a.noise > 0 { im = im.clampedToExtent().applyingFilter("CINoiseReduction", parameters: ["inputNoiseLevel": a.noise * 0.08, "inputSharpness": 0]).cropped(to: extent) }
-        im = im.applyingFilter("CIHighlightShadowAdjust", parameters: ["inputShadowAmount": a.shadows, "inputHighlightAmount": a.highlights])
-        im = im.applyingFilter("CIColorControls", parameters: [kCIInputContrastKey: a.contrast, kCIInputSaturationKey: a.saturation])
-        im = im.applyingFilter("CIVibrance", parameters: ["inputAmount": a.vibrance])
+        if a.shadows != 0 || a.highlights != 1 { im = im.applyingFilter("CIHighlightShadowAdjust", parameters: ["inputShadowAmount": a.shadows, "inputHighlightAmount": a.highlights]) }
+        if a.contrast != 1 || a.saturation != 1 { im = im.applyingFilter("CIColorControls", parameters: [kCIInputContrastKey: a.contrast, kCIInputSaturationKey: a.saturation]) }
+        if a.vibrance != 0 { im = im.applyingFilter("CIVibrance", parameters: ["inputAmount": a.vibrance]) }
         im = im.applyingFilter("CIToneCurve", parameters: ["inputPoint0": CIVector(x: 0, y: a.black), "inputPoint1": CIVector(x: 0.25, y: a.curveLow), "inputPoint2": CIVector(x: 0.5, y: a.curveMid), "inputPoint3": CIVector(x: 0.75, y: a.curveHigh), "inputPoint4": CIVector(x: 1, y: 1)])
         if a.hsl.contains(where: { $0 != HSLBand() }) || (a.colorGrading ?? ColorGrading()) != ColorGrading() {
             im = im.applyingFilter("CIColorCubeWithColorSpace", parameters: ["inputCubeDimension": 24,

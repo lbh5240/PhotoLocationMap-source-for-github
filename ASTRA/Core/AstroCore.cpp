@@ -77,15 +77,31 @@ struct File {
     File(const File&)=delete;File& operator=(const File&)=delete;
     File(File&& o) noexcept:fd(o.fd),bytes(o.bytes){o.fd=-1;}
 };
+float unpackHalf(uint16_t value) {
+    static const auto table=[] {
+        std::array<float, 65536> values{};
+        for(size_t i=0;i<values.size();i++) {
+            const int exponent=(i>>10)&31, fraction=i&1023;
+            float number;
+            if(exponent==0) number=std::ldexp(float(fraction),-24);
+            else if(exponent==31) number=fraction ? std::numeric_limits<float>::quiet_NaN() : std::numeric_limits<float>::infinity();
+            else number=std::ldexp(float(1024+fraction),exponent-25);
+            values[i]=(i&32768)?-number:number;
+        }
+        return values;
+    }();
+    return table[value];
+}
 struct Window {
-    void* ptr=MAP_FAILED;size_t len=0;const float* data=nullptr;int first,last,width;
-    Window(int fd,int w,int h,int y0,int y1):first(std::clamp(y0,0,h-1)),last(std::clamp(y1,0,h-1)),width(w) {
+    void* ptr=MAP_FAILED;size_t len=0;const char* data=nullptr;int first,last,width;bool half;
+    Window(int fd,int w,int h,int y0,int y1,bool useHalf):first(std::clamp(y0,0,h-1)),last(std::clamp(y1,0,h-1)),width(w),half(useHalf) {
         if(last<first)std::swap(first,last);
-        size_t start=size_t(first)*w*16, end=size_t(last+1)*w*16;
+        const size_t pixelBytes=half?8:16;
+        size_t start=size_t(first)*w*pixelBytes, end=size_t(last+1)*w*pixelBytes;
         size_t page=size_t(sysconf(_SC_PAGESIZE)),base=(start/page)*page;
         len=end-base;ptr=mmap(nullptr,len,PROT_READ,MAP_PRIVATE,fd,off_t(base));
         if(ptr==MAP_FAILED)throw std::runtime_error("Cannot map cache window");
-        data=reinterpret_cast<const float*>(static_cast<const char*>(ptr)+(start-base));
+        data=static_cast<const char*>(ptr)+(start-base);
     }
     ~Window(){if(ptr!=MAP_FAILED)munmap(ptr,len);}
     bool sample(int h,double x,double y,float* out) const {
@@ -94,7 +110,7 @@ struct Window {
         if(y0<first||y1>last)return false;
         double fx=x-x0,fy=y-y0;
         for(int c=0;c<3;c++) {
-            auto at=[&](int px,int py){return data[(size_t(py-first)*width+px)*4+c];};
+            auto at=[&](int px,int py){const auto index=(size_t(py-first)*width+px)*4+c;return half ? unpackHalf(reinterpret_cast<const uint16_t*>(data)[index]) : reinterpret_cast<const float*>(data)[index];};
             out[c]=float((1-fy)*((1-fx)*at(x0,y0)+fx*at(x1,y0))+fy*((1-fx)*at(x0,y1)+fx*at(x1,y1)));
             if(!std::isfinite(out[c]))return false;
         } return true;
@@ -172,14 +188,16 @@ Transform liftToFullResolution(Transform t,double scale) {
 
 void stack(const std::vector<Input>& inputs,int w,int h,const Settings& cfg,const std::string& output,std::atomic<bool>& cancel,const std::function<void(double)>& progress) {
     if(inputs.size()<2||inputs.size()>512||w<2||h<2||w>30000||h>30000||!(cfg.sigma>=1&&cfg.sigma<=8)||!(cfg.minimumCoverage>0&&cfg.minimumCoverage<=1))throw std::runtime_error("Invalid stack configuration");
-    size_t bytes=size_t(w)*h*16;std::vector<File> files;files.reserve(inputs.size());
-    for(auto& in:inputs){if(!(in.weight>0&&std::isfinite(in.weight)))throw std::runtime_error("Invalid frame weight");files.emplace_back(in.path,bytes);}
+    std::vector<File> files;files.reserve(inputs.size());
+    for(auto& in:inputs){if(!(in.weight>0&&std::isfinite(in.weight)))throw std::runtime_error("Invalid frame weight");files.emplace_back(in.path,size_t(w)*h*(in.half?8:16));}
     std::string temp=output+".partial";int out=open(temp.c_str(),O_CREAT|O_TRUNC|O_WRONLY,0600);
     if(out<0)throw std::runtime_error("Cannot create stack output");
     try {
-        const int tw=256,th=32;size_t n=inputs.size();
-        std::vector<float> rows(size_t(w)*th*4),values(n*tw*th*3),ground(values.size());
-        std::vector<unsigned char> valid(n*tw*th),groundValid(valid.size());
+        const bool landscape=cfg.mode==Mode::landscape;
+        const size_t n=inputs.size();
+        const int tw=256,th=std::clamp(int(786432/(n*tw*(landscape?2:1))),4,32);
+        std::vector<float> rows(size_t(w)*th*4),values(n*tw*th*3),ground(landscape?values.size():0);
+        std::vector<unsigned char> valid(n*tw*th),groundValid(landscape?valid.size():0);
         std::vector<double> v(n),wt(n),sorted(n),deviation(n);
         for(int y0=0;y0<h;y0+=th) {
             int hh=std::min(th,h-y0);std::fill(rows.begin(),rows.end(),0);
@@ -192,10 +210,10 @@ void stack(const std::vector<Input>& inputs,int w,int h,const Settings& cfg,cons
                     Transform t=cfg.mode==Mode::trails?Transform{}:inputs[f].transform;
                     std::array<std::pair<double,double>,4> corners={map(t,x0,y0),map(t,x0+ww-1,y0),map(t,x0,y0+hh-1),map(t,x0+ww-1,y0+hh-1)};
                     double lo=h,hi=0;for(auto p:corners){lo=std::min(lo,p.second);hi=std::max(hi,p.second);}
-                    {Window win(files[f].fd,w,h,int(std::floor(lo))-1,int(std::ceil(hi))+1);
+                    {Window win(files[f].fd,w,h,int(std::floor(lo))-1,int(std::ceil(hi))+1,inputs[f].half);
                     for(int y=0;y<hh;y++)for(int x=0;x<ww;x++){size_t p=size_t(y)*ww+x;auto s=map(t,x0+x,y0+y);valid[f*pixels+p]=win.sample(h,s.first,s.second,&values[(f*pixels+p)*3]);}}
                     if(cfg.mode==Mode::landscape) {
-                        Window win(files[f].fd,w,h,y0,y0+hh);
+                        Window win(files[f].fd,w,h,y0,y0+hh,inputs[f].half);
                         for(int y=0;y<hh;y++)for(int x=0;x<ww;x++){size_t p=size_t(y)*ww+x;groundValid[f*pixels+p]=win.sample(h,x0+x,y0+y,&ground[(f*pixels+p)*3]);}
                     }
                 }

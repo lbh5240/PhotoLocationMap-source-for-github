@@ -12,6 +12,7 @@ struct StackConfiguration: Codable, Equatable, Sendable {
     var sigma: Double = 3
     var skyFraction: Double = 0.65
     var feather: Double = 0.04
+    var halfResolution: Bool?
 }
 struct HSLBand: Codable, Equatable, Sendable {
     var hue: Double = 0

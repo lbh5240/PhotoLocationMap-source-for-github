@@ -1,5 +1,10 @@
 import Foundation
 
+enum PhotoFormat: String, CaseIterable, Hashable, Sendable {
+    case raw = "RAW / NEF"
+    case processed = "JPEG / 普通照片"
+}
+
 enum StackSelection {
     static let rawExtensions: Set<String> = ["nef", "nrw", "dng", "arw", "cr2", "cr3", "raf", "orf", "rw2"]
 
@@ -7,11 +12,20 @@ enum StackSelection {
         rawExtensions.contains((frame.fileName as NSString).pathExtension.lowercased())
     }
 
-    static func indices(in project: AstroProject) throws -> [Int] {
+    static func formats(in project: AstroProject) -> Set<PhotoFormat> {
+        Set(project.frames.filter(\.included).map { isRaw($0) ? .raw : .processed })
+    }
+
+    static func indices(in project: AstroProject, format: PhotoFormat? = nil) throws -> [Int] {
         let selected = project.frames.indices.filter { project.frames[$0].included }
         guard selected.count >= 2 else { throw AstroError.message("请至少选择两次拍摄的照片。") }
         let raw = selected.filter { isRaw(project.frames[$0]) }
         let processed = selected.filter { !isRaw(project.frames[$0]) }
+        if let format {
+            let matches = format == .raw ? raw : processed
+            guard matches.count >= 2 else { throw AstroError.message("所选格式不足两张，请再导入至少一张同格式照片。") }
+            return matches
+        }
         if raw.isEmpty || processed.isEmpty { return selected }
         if raw.count >= 2 { return raw }
         if processed.count >= 2 { return processed }

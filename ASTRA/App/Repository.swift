@@ -26,13 +26,17 @@ struct ProjectRepository: Sendable {
             // A corrupt project is an explicit error; never silently hide a user's work.
             var p = try decoder.decode(AstroProject.self, from: Data(contentsOf: manifest))
             guard p.schema == 1 else { throw AstroError.message("工程版本不兼容：\(p.name)") }
-            if p.jobInProgress {
-                for location in [dir, dir.appendingPathComponent("Cache", isDirectory: true)] {
-                    let files = (try? FileManager.default.contentsOfDirectory(at: location, includingPropertiesForKeys: nil)) ?? []
-                    for f in files where f.lastPathComponent.hasSuffix(".rgba.partial") { try? FileManager.default.removeItem(at: f) }
+            // This directory only contains reproducible pixel intermediates.
+            try? clearCache(p)
+            let files = (try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? []
+            for file in files {
+                let name = file.lastPathComponent
+                if name.hasSuffix(".rgba.partial") ||
+                    (name.hasPrefix("Master-") && name.hasSuffix(".rgba") && name != p.result?.fileName) {
+                    try? FileManager.default.removeItem(at: file)
                 }
-                p.jobInProgress = false; try save(p)
             }
+            if p.jobInProgress { p.jobInProgress = false; try save(p) }
             projects.append(p)
         }
         return projects.sorted { $0.updated > $1.updated }

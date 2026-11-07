@@ -16,11 +16,11 @@ assert (result['width'], result['height']) == (384, 256)
 master = (folder / result['fileName']).read_bytes()
 assert len(master) == 384 * 256 * 16
 for frame in project['frames']:
-    source = folder / 'Cache' / (frame['id'] + '.rgba')
-    assert source.read_bytes() != master, 'Stack must differ from every input'
+    assert (folder / frame["fileName"]).is_file(), "Original must remain available"
+assert not (folder / "Cache").exists(), "Decoded frames must be removed after stacking"
 rgba = array.array('f')
 rgba.frombytes(master)
 assert all(math.isfinite(value) for value in rgba)
 assert sum(alpha > 0 for alpha in rgba[3::4]) > 384 * 256 * .9
 assert max(rgba[0::4]) > .3
-print('Verified output: 3 imported PNGs, 384x256, valid combined pixels, different from all inputs')
+print('Verified output: 3 imported PNGs, 384x256, valid combined pixels, temporary decode files removed')

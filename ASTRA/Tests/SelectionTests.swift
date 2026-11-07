@@ -12,6 +12,15 @@ struct SelectionTests {
     static func main() throws {
         let paired = try StackSelection.indices(in: project(["jpg", "NEF", "jpg", "NEF"]))
         assert(paired == [1, 3])
+        let mixed = project(["jpg", "NEF", "jpg", "NEF"])
+        assert(StackSelection.formats(in: mixed) == [.raw, .processed])
+        let requestedJPEG = try StackSelection.indices(in: mixed, format: .processed)
+        let requestedRAW = try StackSelection.indices(in: mixed, format: .raw)
+        assert(requestedJPEG == [0, 2] && requestedRAW == [1, 3])
+        do {
+            _ = try StackSelection.indices(in: project(["jpg", "NEF", "NEF"]), format: .processed)
+            fatalError("Must not fall back to the other format")
+        } catch { assert(error.localizedDescription.contains("所选格式不足")) }
         let jpeg = try StackSelection.indices(in: project(["jpeg", "nef", "jpeg"]))
         assert(jpeg == [0, 2])
         let raw = try StackSelection.indices(in: project(["NEF", "NEF"]))
