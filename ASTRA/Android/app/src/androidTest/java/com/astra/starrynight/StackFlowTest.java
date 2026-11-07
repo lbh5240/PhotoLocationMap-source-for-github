@@ -51,9 +51,15 @@ public class StackFlowTest {
             NativeEngine.render(p.file(p.master).getPath(),384,256,neutral,0,1,1,0,new double[9]);
             NativeEngine.render(p.file(p.master).getPath(),384,256,colored,0,1,1,0,new double[]{.6,.2,0,0,0,0,0,0,0});
             assertNotEquals(neutral.getPixel(10,10),colored.getPixel(10,10));
+            Bitmap astro=Bitmap.createBitmap(384,256,Bitmap.Config.ARGB_8888);
+            NativeEngine.renderEnhanced(p.file(p.master).getPath(),384,256,astro,0,1,1,0,new double[9],
+                    new double[]{20,.6,.5,.8,1},true);
+            assertNotEquals("STF and astro processing must render real pixels",neutral.getPixel(10,10),astro.getPixel(10,10));
+            assertArrayEquals("Preview changes must not alter the Float32 master",master,
+                    java.nio.file.Files.readAllBytes(p.file(p.master).toPath()));
             File exported=p.file("verified-export.png");
             try(FileOutputStream out=new FileOutputStream(exported)){assertTrue(colored.compress(Bitmap.CompressFormat.PNG,100,out));}
-            assertTrue(exported.length()>100);neutral.recycle();colored.recycle();
+            assertTrue(exported.length()>100);neutral.recycle();colored.recycle();astro.recycle();
         }
     }
     @Test public void libRawDecodesTheCfaTestFile() throws Exception {

@@ -49,7 +49,7 @@ public final class MainActivity extends Activity {
         root.addView(photo,new LinearLayout.LayoutParams(-1,0,1));
         status = text("从相册或文件导入一组星空照片",13);status.setPadding(0,dp(8),0,dp(8));root.addView(status);
         progress = new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);progress.setMax(1000);progress.setVisibility(View.GONE);root.addView(progress,new LinearLayout.LayoutParams(-1,dp(4)));
-        LinearLayout tabs = row();String[] titles={"堆栈","调整","色轮"};
+        LinearLayout tabs = row();String[] titles={"堆栈","调整","色轮","星云"};
         for(int i=0;i<titles.length;i++){final int index=i;tabs.addView(button(titles[i],()->{if(!busy){section=index;showPanel();}}));}root.addView(tabs);
         ScrollView controls=new ScrollView(this);panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);controls.addView(panel);root.addView(controls,new LinearLayout.LayoutParams(-1,dp(215)));
         LinearLayout actions=row();importButton=button("导入",this::chooseImport);stackButton=button("开始合成",this::startStack);exportButton=button("导出",this::export);
@@ -136,6 +136,8 @@ public final class MainActivity extends Activity {
             String[] labels={"星空对齐","星野地景","星轨"};for(int i=0;i<3;i++){RadioButton radio=new RadioButton(this);radio.setText(labels[i]);radio.setTextColor(Color.WHITE);radio.setTextSize(12);radio.setId(100+i);modes.addView(radio);}
             modes.check(100+project.mode);modes.setOnCheckedChangeListener((g,id)->{if(!busy){project.mode=id-100;save();}});panel.addView(modes);
             slider("天空高度（星野模式）",project.sky,.15,1,value->{project.sky=value;save();});
+            CheckBox hdr = new CheckBox(this);hdr.setText("HDR 多曝光融合 · 短曝光保护亮核");hdr.setTextColor(Color.WHITE);
+            hdr.setChecked(project.hdrFusion);hdr.setOnCheckedChangeListener((button,checked)->{project.hdrFusion=checked;save();});panel.addView(hdr);
             Button frames=button("管理照片 · "+project.frames.size()+" 张",this::manageFrames);panel.addView(frames,new LinearLayout.LayoutParams(-1,dp(44)));
             panel.addView(text("选同一片天空、相同尺寸的照片。星野模式适用于平坦地平线，至少两张可对齐照片才能合成。",12));
         }else if(section==1){
@@ -143,12 +145,20 @@ public final class MainActivity extends Activity {
             slider("对比度",project.contrast,.5,1.8,v->{project.contrast=v;save();schedulePreview();});
             slider("饱和度",project.saturation,0,2,v->{project.saturation=v;save();schedulePreview();});
             slider("冷暖",project.warmth,-1,1,v->{project.warmth=v;save();schedulePreview();});
-        }else{
+        }else if(section==2){
             LinearLayout ranges=row();String[] labels={"阴影","中间调","高光"};for(int i=0;i<3;i++){final int selected=i;ranges.addView(button(labels[i],()->{range=selected;showPanel();}));}panel.addView(ranges);
             WheelView wheel=new WheelView(this);wheel.x=project.wheels[range*3];wheel.y=project.wheels[range*3+1];wheel.listener=(x,y)->{if(!busy){project.wheels[range*3]=x;project.wheels[range*3+1]=y;save();schedulePreview();}};
             LinearLayout.LayoutParams layout=new LinearLayout.LayoutParams(dp(125),dp(125));layout.gravity=Gravity.CENTER_HORIZONTAL;panel.addView(wheel,layout);
             slider(labels[range]+"亮度",project.wheels[range*3+2],-1,1,v->{project.wheels[range*3+2]=v;save();schedulePreview();});
             panel.addView(button("重置当前色轮",()->{for(int i=0;i<3;i++)project.wheels[range*3+i]=0;save();showPanel();schedulePreview();}),new LinearLayout.LayoutParams(-1,dp(44)));
+        }else{
+            CheckBox stf = new CheckBox(this);stf.setText("自动 STF · 仅屏幕预览，不写入线性主文件");stf.setTextColor(Color.WHITE);
+            stf.setChecked(project.autoSTF);stf.setOnCheckedChangeListener((button,checked)->{project.autoSTF=checked;save();schedulePreview();});panel.addView(stf);
+            slider("Arcsinh 拉伸",project.arcsinh,0,60,v->{project.arcsinh=v;save();schedulePreview();});
+            slider("Masked Stretch · 核心保护",project.maskedStretch,0,1,v->{project.maskedStretch=v;save();schedulePreview();});
+            slider("背景梯度消除",project.gradientRemoval,0,1,v->{project.gradientRemoval=v;save();schedulePreview();});
+            slider("星云对比",project.nebulaContrast,0,1,v->{project.nebulaContrast=v;save();schedulePreview();});
+            slider("星点保护",project.starProtection,0,1,v->{project.starProtection=v;save();schedulePreview();});
         }
     }
     interface Adjustment {void set(double value);}
@@ -169,11 +179,11 @@ public final class MainActivity extends Activity {
         if(selected.size()<2){setStatus("无法合成。请在照片列表选择至少两张照片。");return;}
         int width=selected.get(0).width,height=selected.get(0).height;
         for(Project.Frame frame:selected)if(frame.width!=width||frame.height!=height){setStatus("无法合成。照片尺寸不同，请排除裁切或方向不同的照片。");return;}
-        Project target=project;String master="Master-"+UUID.randomUUID()+".rgba";int mode=target.mode;double sky=target.sky;
+        Project target=project;String master="Master-"+UUID.randomUUID()+".rgba";int mode=target.mode;double sky=target.sky;boolean hdr=target.hdrFusion;
         String[] caches=selected.stream().map(f->target.file(f.cache).getPath()).toArray(String[]::new);begin("准备合成");cancellable=true;stackButton.setText("取消");stackButton.setEnabled(true);
         worker.execute(()->{
             try{
-                int count=NativeEngine.stack(caches,width,height,mode,sky,target.file(master).getPath(),(value,stage)->runOnUiThread(()->{progress.setProgress((int)(value*1000));setStatus(stage+" "+(int)(value*100)+"%");}));
+                int count=NativeEngine.stackEnhanced(caches,width,height,mode,sky,hdr,target.file(master).getPath(),(value,stage)->runOnUiThread(()->{progress.setProgress((int)(value*1000));setStatus(stage+" "+(int)(value*100)+"%");}));
                 String old=target.master;int oldWidth=target.width,oldHeight=target.height,oldAccepted=target.accepted;target.master=master;target.width=width;target.height=height;target.accepted=count;
                 try{target.save();}catch(Exception error){target.master=old;target.width=oldWidth;target.height=oldHeight;target.accepted=oldAccepted;target.file(master).delete();throw error;}
                 if(old!=null)target.file(old).delete();runOnUiThread(()->{endOperation();setStatus(formatNote+"合成完成 · "+count+" 帧 · "+width+"×"+height+"\n可以继续调色或导出");schedulePreview();});
@@ -187,10 +197,11 @@ public final class MainActivity extends Activity {
         if(path==null){Project.Frame f=target.frames.get(0);path=f.cache;width=f.width;height=f.height;}
         final String file=target.file(path).getPath();final int w=width,h=height;
         double exposure=target.exposure,contrast=target.contrast,saturation=target.saturation,warmth=target.warmth;double[] wheels=target.wheels.clone();
+        double[] astro={target.arcsinh,target.maskedStretch,target.gradientRemoval,target.nebulaContrast,target.starProtection};boolean stf=target.master!=null&&target.autoSTF;
         pendingPreview=()->worker.execute(()->{
             if(generation!=previewGeneration)return;
             try{double scale=Math.min(1,1280.0/Math.max(w,h));Bitmap bitmap=Bitmap.createBitmap(Math.max(1,(int)(w*scale)),Math.max(1,(int)(h*scale)),Bitmap.Config.ARGB_8888);
-                NativeEngine.render(file,w,h,bitmap,exposure,contrast,saturation,warmth,wheels);
+                NativeEngine.renderEnhanced(file,w,h,bitmap,exposure,contrast,saturation,warmth,wheels,astro,stf);
                 runOnUiThread(()->{if(generation!=previewGeneration){bitmap.recycle();return;}Bitmap old=displayed;displayed=bitmap;photo.setImageBitmap(bitmap);if(old!=null)old.recycle();});
             }catch(Exception|OutOfMemoryError error){runOnUiThread(()->setStatus("预览失败："+error.getMessage()));}
         });main.postDelayed(pendingPreview,130);
@@ -201,7 +212,9 @@ public final class MainActivity extends Activity {
             Project target=project;begin("导出全分辨率图片");worker.execute(()->{
                 try{
                     String path=target.master;int w=target.width,h=target.height;if(path==null){Project.Frame f=target.frames.get(0);path=f.cache;w=f.width;h=f.height;}
-                    Bitmap output=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);NativeEngine.render(target.file(path).getPath(),w,h,output,target.exposure,target.contrast,target.saturation,target.warmth,target.wheels);
+                    Bitmap output=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);
+                    double[] astro={target.arcsinh,target.maskedStretch,target.gradientRemoval,target.nebulaContrast,target.starProtection};
+                    NativeEngine.renderEnhanced(target.file(path).getPath(),w,h,output,target.exposure,target.contrast,target.saturation,target.warmth,target.wheels,astro,false);
                     File file=target.file("ASTRA-"+UUID.randomUUID()+(index==0?".jpg":".png"));
                     try(OutputStream stream=new FileOutputStream(file)){if(!output.compress(index==0?Bitmap.CompressFormat.JPEG:Bitmap.CompressFormat.PNG,96,stream))throw new IOException("编码失败");}finally{output.recycle();}
                     runOnUiThread(()->{endOperation();setStatus("已导出全分辨率成片");Uri uri=FileProvider.getUriForFile(this,"com.astra.starrynight.files",file);Intent share=new Intent(Intent.ACTION_SEND).setType(index==0?"image/jpeg":"image/png").putExtra(Intent.EXTRA_STREAM,uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);startActivity(Intent.createChooser(share,"分享成片"));});
@@ -210,8 +223,8 @@ public final class MainActivity extends Activity {
         }).show();
     }
     private void showGuide(){
-        String[] titles={"导入照片","选择堆栈模式","调整与色轮","导出成片"};
-        String[] content={"从导入入口选择手机相册，或从文件选择 NEF。单张可以调色，多帧建议保持机位、焦距和曝光一致。", "星空对齐会匹配星点并剔除无法对齐的帧。星野地景需要设置水平天空分界。星轨使用最大值合成。失败原因会显示在画面下方。", "先调曝光、对比度和饱和度。色轮可分别调整阴影、中间调和高光，拖动方向选颜色，距中心越远强度越高。", "导出支持全分辨率 JPEG 和 PNG，工程会在本机保存。原始 NEF 通过 LibRaw 解码，不同机型和压缩类型可能有兼容差异。"};
+        String[] titles={"导入照片","选择堆栈模式","星云与色轮","导出成片"};
+        String[] content={"从导入入口选择手机相册，或从文件选择 NEF。若相册只给出 JPEG，请从文件选择原始 NEF。", "星空对齐按星点匹配。长短曝光可开启 HDR 融合，短曝光用于恢复亮核。", "合成后的自动 STF 仅改变屏幕预览。星云工具可调 Arcsinh、核心保护、背景梯度与星点保护；色轮分阴影、中间调和高光。", "导出应用星云与调色调整，但不应用 STF。工程保存在本机，RAW 由 LibRaw 解码。"};
         showGuidePage(0,titles,content);
     }
     private void showGuidePage(int page,String[] titles,String[] content){

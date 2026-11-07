@@ -33,6 +33,8 @@ final class Project {
     String master;
     int width, height, accepted, mode;
     double sky = .65, exposure, contrast = 1, saturation = 1, warmth;
+    boolean hdrFusion, autoSTF = true;
+    double arcsinh, maskedStretch, gradientRemoval, nebulaContrast, starProtection = 1;
     double[] wheels = new double[9];
 
     Project(File directory) { this.directory = directory; }
@@ -47,7 +49,10 @@ final class Project {
         JSONObject object = new JSONObject().put("name", name).put("width", width).put("height", height)
                 .put("accepted", accepted).put("mode", mode).put("sky", sky)
                 .put("exposure", exposure).put("contrast", contrast).put("saturation", saturation)
-                .put("warmth", warmth).put("wheels", new JSONArray(wheels));
+                .put("warmth", warmth).put("wheels", new JSONArray(wheels))
+                .put("hdrFusion", hdrFusion).put("autoSTF", autoSTF).put("arcsinh", arcsinh)
+                .put("maskedStretch", maskedStretch).put("gradientRemoval", gradientRemoval)
+                .put("nebulaContrast", nebulaContrast).put("starProtection", starProtection);
         if (master != null) object.put("master", master);
         JSONArray input = new JSONArray();
         for (Frame frame : frames) input.put(frame.json());
@@ -67,6 +72,11 @@ final class Project {
         p.mode = object.optInt("mode"); p.sky = object.optDouble("sky", .65);
         p.exposure = object.optDouble("exposure"); p.contrast = object.optDouble("contrast", 1);
         p.saturation = object.optDouble("saturation", 1); p.warmth = object.optDouble("warmth");
+        p.hdrFusion = object.optBoolean("hdrFusion", false); p.autoSTF = object.optBoolean("autoSTF", true);
+        p.arcsinh = object.optDouble("arcsinh", 0); p.maskedStretch = object.optDouble("maskedStretch", 0);
+        p.gradientRemoval = object.optDouble("gradientRemoval", 0);
+        p.nebulaContrast = object.optDouble("nebulaContrast", 0);
+        p.starProtection = object.optDouble("starProtection", 1);
         p.master = object.has("master") ? object.getString("master") : null;
         JSONArray frames = object.getJSONArray("frames");
         for (int i = 0; i < frames.length(); i++) p.frames.add(Frame.read(frames.getJSONObject(i)));
