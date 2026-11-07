@@ -64,6 +64,8 @@ int main(int argc,char** argv) {
         std::vector<Input> coarseInputs, refinedInputs;
         std::vector<float> clean;
         Analysis nebulaReference;
+        const double exposures[5]={1.0,.32,2.6,.55,1.75};
+        const double skyOffsets[5]={0,.004,.012,.002,.008};
         for(int frame=0;frame<5;frame++){
             const double angle=frame*.002,dx=2.75*frame,dy=-1.55*frame;
             const double a=std::cos(angle),b=std::sin(angle);
@@ -74,18 +76,20 @@ int main(int argc,char** argv) {
                 const double value=.01+.09*std::exp(-(u*u+2*v*v)/7000)+
                     .18*std::exp(-u*u/1300-filament*filament/2);
                 const size_t i=(size_t(y)*nw+x)*4;
-                raster[i]=raster[i+1]=raster[i+2]=float(value);raster[i+3]=1;
+                raster[i]=raster[i+1]=raster[i+2]=float(value*exposures[frame]+skyOffsets[frame]);raster[i+3]=1;
             }
             Analysis measured;
             for(const auto star:nebulaStars){
                 const double x=a*star.x-b*star.y+dx,y=b*star.x+a*star.y+dy;
                 for(int v=int(y)-5;v<=int(y)+5;v++)for(int u=int(x)-5;u<=int(x)+5;u++){
                     const float value=float(star.flux*std::exp(-((x-u)*(x-u)+(y-v)*(y-v))/3.2));
-                    for(int c=0;c<3;c++)raster[(size_t(v)*nw+u)*4+c]+=value;
+                    for(int c=0;c<3;c++)raster[(size_t(v)*nw+u)*4+c]+=float(value*exposures[frame]);
                 }
                 const double bias=frame==0?0:.37;
-                measured.stars.push_back({(x+.5)*proxy-.5+bias,(y+.5)*proxy-.5-bias*.65,star.flux,1});
+                measured.stars.push_back({(x+.5)*proxy-.5+bias,(y+.5)*proxy-.5-bias*.65,
+                                          star.flux*exposures[frame],1});
             }
+            measured.background=.01*exposures[frame]+skyOffsets[frame];
             Input input{dir+"/nebula-"+std::to_string(frame),{},1};
             save(input.path,raster);
             if(frame==0){nebulaReference=measured;clean=raster;}
@@ -95,9 +99,21 @@ int main(int argc,char** argv) {
                 input.transform=registerFrame(nebulaReference,measured,proxy,refinedInputs.front(),input,nw,nh);
                 check(input.transform.rms<.25 && std::hypot(input.transform.tx-dx,input.transform.ty-dy)<.3,
                       "native-grid registration recovers true nebula drift");
+                check(std::abs(input.transform.gain-1/exposures[frame])<.04 &&
+                      std::abs(input.transform.offset-(.01-measured.background/exposures[frame]))<.004,
+                      "native-grid star flux normalizes exposure");
             }
+            input.gain=input.transform.gain;
+            input.offset=input.transform.offset;
+            coarse.gain=input.gain;coarse.offset=input.offset;
             coarseInputs.push_back(coarse);refinedInputs.push_back(input);
         }
+        auto reduced=clean;
+        for(size_t i=0;i<reduced.size();i+=4)
+            for(int c=0;c<3;c++)reduced[i+c]=reduced[i+c]*.32f+.004f;
+        const auto brightStars=analyze(clean.data(),nw,nh);
+        const auto dimStars=analyze(reduced.data(),nw,nh);
+        check(align(brightStars,dimStars).matches>=8,"exposure must not prevent geometric matching");
         const auto nebulaPath=dir+"/nebula-result";
         stack(coarseInputs,nw,nh,integratedConfig,nebulaPath+"-coarse",integratedCancel,[](double){});
         stack(refinedInputs,nw,nh,integratedConfig,nebulaPath,integratedCancel,[](double){});
@@ -109,7 +125,7 @@ int main(int argc,char** argv) {
             refinedError+=std::pow(clean[i]-refinedImage[i],2);
         }
         check(refinedError<coarseError*.20,"full-resolution registration preserves the nebula filament");
-        std::cout<<"PASS nebula detail after rotation and drift, refined/coarse MSE="<<refinedError/coarseError<<"\n";
+        std::cout<<"PASS mixed exposures retain nebula detail after rotation and drift, refined/coarse MSE="<<refinedError/coarseError<<"\n";
         int w=96,h=80;std::vector<Input> ins;std::normal_distribution<float> n(0,.02);double inputVar=0;
         for(int f=0;f<15;f++){std::vector<float> v(size_t(w)*h*4);for(int p=0;p<w*h;p++){float delta=n(gen);inputVar+=delta*delta;for(int c=0;c<3;c++)v[p*4+c]=.25f+delta;v[p*4+3]=1;}if(f==3)for(int c=0;c<3;c++)v[(30*w+40)*4+c]=8;std::string p=dir+"/f"+std::to_string(f);save(p,v);ins.push_back({p,{},1});}
         Settings cfg;std::atomic<bool> cancel(false);double progress=0;std::string output=dir+"/result";

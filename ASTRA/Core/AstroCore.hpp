@@ -12,11 +12,12 @@ struct Transform {
     double a=1, b=0, tx=0, ty=0;
     int matches=0;
     double rms=0;
+    double gain=1, offset=0;
 };
 Analysis analyze(const float* rgba, int width, int height, double skyFraction=1);
 Transform align(const Analysis& reference, const Analysis& source);
 Transform liftToFullResolution(Transform proxyTransform, double proxyScale);
-struct Input { std::string path; Transform transform; double weight=1; bool half=false; };
+struct Input { std::string path; Transform transform; double weight=1; bool half=false; double gain=1, offset=0; };
 // Refine coarse matching from full-resolution linear pixels before any frame enters the stack.
 Transform registerFrame(const Analysis& reference, const Analysis& source, double proxyScale,
                         const Input& referencePixels, const Input& sourcePixels, int width, int height);

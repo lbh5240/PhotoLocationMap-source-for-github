@@ -45,6 +45,14 @@ enum SimulatorStackFixture {
                     for channel in 0..<3 { rgba[offset + channel] = UInt8(min(255, Int(rgba[offset + channel]) + value)) }
                 }
             }
+            if variant == "exposure" {
+                let multiplier = [1.0, 0.48, 1.65][frame]
+                for index in stride(from: 0, to: rgba.count, by: 4) {
+                    for channel in 0..<3 {
+                        rgba[index + channel] = UInt8(min(255, max(0, Int(Double(rgba[index + channel]) * multiplier))))
+                    }
+                }
+            }
             let data = Data(rgba)
             let provider = CGDataProvider(data: data as CFData)!
             let image = CGImage(width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32,

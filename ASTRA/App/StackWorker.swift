@@ -109,9 +109,11 @@ enum StackWorker {
             let a = (t["a"] as? NSNumber)?.doubleValue ?? 1, b = (t["b"] as? NSNumber)?.doubleValue ?? 0
             let tx = ((t["tx"] as? NSNumber)?.doubleValue ?? 0)
             let ty = ((t["ty"] as? NSNumber)?.doubleValue ?? 0)
+            let gain = ((t["gain"] as? NSNumber)?.doubleValue ?? 1)
+            let offset = ((t["offset"] as? NSNumber)?.doubleValue ?? 0)
             frames[i].registrationRMS = ((t["rms"] as? NSNumber)?.doubleValue ?? 0)
             // Geometry uses pixel-center coordinates at each scale.
-            accepted.append(["path": cacheURL(i).path, "half": true, "a": a, "b": b, "tx": tx, "ty": ty, "weight": max(0.01, min(100, frames[i].quality ?? 1))])
+            accepted.append(["path": cacheURL(i).path, "half": true, "a": a, "b": b, "tx": tx, "ty": ty, "weight": max(0.01, min(100, frames[i].quality ?? 1)), "gain": gain, "offset": offset])
         }
         guard accepted.count >= 2 else {
             let reasons = selected.compactMap { frames[$0].rejection }.prefix(2).joined(separator: "；")

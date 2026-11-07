@@ -99,7 +99,7 @@ extern "C" JNIEXPORT jint JNICALL Java_com_astra_starrynight_NativeEngine_stack(
             astra::Transform transform;
             try{if(i!=reference&&mode!=2)transform=astra::registerFrame(analyses[reference],analyses[i],scale,{names[reference],{},1},{names[i],{},1},w,h);}
             catch(const std::exception&){continue;}
-            inputs.push_back({names[i],transform,std::max(.01,analyses[i].quality)});progress(.3+.15*(i+1)/count,"星点配准");
+            inputs.push_back({names[i],transform,std::max(.01,analyses[i].quality),false,transform.gain,transform.offset});progress(.3+.15*(i+1)/count,"星点配准");
         }
         if(inputs.size()<2)throw std::runtime_error("成功对齐不足两张，请排除云层、拖尾或构图不同的照片");
         astra::Settings cfg;cfg.mode=(astra::Mode)mode;cfg.skyFraction=sky;

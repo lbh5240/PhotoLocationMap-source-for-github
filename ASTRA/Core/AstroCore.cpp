@@ -183,13 +183,13 @@ Analysis analyze(const float* rgba,int w,int h,double skyFraction) {
     a.noise=std::max(1e-7,1.4826*median(samples));
     std::vector<Star> candidates;
     for(int y=std::max(minY+5,5);y<h-5;y++)for(int x=5;x<w-5;x++) {
-        double peak=lum[size_t(y)*w+x];if(peak<a.background+6*a.noise)continue;
+        double peak=lum[size_t(y)*w+x];if(peak<a.background+4.5*a.noise)continue;
         bool maximum=true;
         for(int dy=-2;dy<=2&&maximum;dy++)for(int dx=-2;dx<=2;dx++) if((dx||dy)&&lum[size_t(y+dy)*w+x+dx]>=peak){maximum=false;break;}
         if(!maximum)continue;
         std::vector<double> ring;for(int dy=-5;dy<=5;dy++)for(int dx=-5;dx<=5;dx++)if(std::abs(dx)>=4||std::abs(dy)>=4)ring.push_back(lum[size_t(y+dy)*w+x+dx]);
         double bg=median(ring),mass=0,cx=0,cy=0;
-        if(peak-bg<6*a.noise)continue;
+        if(peak-bg<4.5*a.noise)continue;
         for(int dy=-3;dy<=3;dy++)for(int dx=-3;dx<=3;dx++) {double v=std::max(0.0,lum[size_t(y+dy)*w+x+dx]-bg);mass+=v;cx+=v*(x+dx);cy+=v*(y+dy);}
         if(mass<=0)continue;
         cx/=mass;cy/=mass;double xx=0,yy=0,xy=0;
@@ -275,17 +275,27 @@ Transform registerFrame(const Analysis& ref,const Analysis& src,double scale,
     if(inliers.size()<required)fail();
     const Transform result=fit(r,s,inliers);
     if(result.rms>.65||std::abs(result.a-initial.a)>.02||std::abs(result.b-initial.b)>.02)fail();
-    // Reject frames with visibly wider stellar profiles across the matched field.
+    // Normalize exposure from matched stars. The offset aligns the sky background;
+    // extended nebula structure is scaled with the same linear gain.
+    std::vector<double> gains;
+    for(const auto p:inliers) if(s[p.s].flux>1e-7 && r[p.r].flux>1e-7)
+        gains.push_back(r[p.r].flux/s[p.s].flux);
+    if(gains.size()<required)fail();
+    Transform normalized=result;
+    normalized.gain=std::clamp(median(gains),.08,12.0);
+    normalized.offset=ref.background-src.background*normalized.gain;
+    // Compare stellar widths only when the exposure is close enough to make
+    // their measured profiles comparable.
     std::vector<double> widths;
     for(const auto p:inliers)widths.push_back(s[p.s].radius/std::max(.5,r[p.r].radius));
-    if(median(widths)>1.55)throw std::runtime_error("星点明显比参考帧宽，已排除可能失焦或拖线的帧");
-    return result;
+    if(normalized.gain>.85 && normalized.gain<1.15 && median(widths)>1.55)throw std::runtime_error("星点明显比参考帧宽，已排除可能失焦或拖线的帧");
+    return normalized;
 }
 
 void stack(const std::vector<Input>& inputs,int w,int h,const Settings& cfg,const std::string& output,std::atomic<bool>& cancel,const std::function<void(double)>& progress) {
     if(inputs.size()<2||inputs.size()>512||w<2||h<2||w>30000||h>30000||!(cfg.sigma>=1&&cfg.sigma<=8)||!(cfg.minimumCoverage>0&&cfg.minimumCoverage<=1))throw std::runtime_error("堆栈设置无效");
     std::vector<File> files;files.reserve(inputs.size());
-    for(auto& in:inputs){if(!(in.weight>0&&std::isfinite(in.weight)))throw std::runtime_error("Invalid frame weight");files.emplace_back(in.path,size_t(w)*h*(in.half?8:16));}
+    for(auto& in:inputs){if(!(in.weight>0&&std::isfinite(in.weight)&&in.gain>0&&std::isfinite(in.gain)&&std::isfinite(in.offset)))throw std::runtime_error("照片亮度校正参数无效");files.emplace_back(in.path,size_t(w)*h*(in.half?8:16));}
     std::string temp=output+".partial";int out=open(temp.c_str(),O_CREAT|O_TRUNC|O_WRONLY,0600);
     if(out<0)throw std::runtime_error("无法创建合成文件，请检查存储空间");
     try {
@@ -314,7 +324,7 @@ void stack(const std::vector<Input>& inputs,int w,int h,const Settings& cfg,cons
                     }
                 }
                 auto combine=[&](size_t p,int c,const std::vector<float>& vals,const std::vector<unsigned char>& mask,bool trails)->std::pair<float,bool> {
-                    size_t count=0;for(size_t f=0;f<n;f++)if(mask[f*pixels+p]){v[count]=vals[(f*pixels+p)*3+c];wt[count]=inputs[f].weight;count++;}
+                    size_t count=0;for(size_t f=0;f<n;f++)if(mask[f*pixels+p]){v[count]=vals[(f*pixels+p)*3+c]*inputs[f].gain+inputs[f].offset;wt[count]=inputs[f].weight;count++;}
                     if(count<size_t(std::max(2,int(std::ceil(n*cfg.minimumCoverage)))))return {0,false};
                     if(trails)return {float(*std::max_element(v.begin(),v.begin()+count)),true};
                     double center=0,limit=std::numeric_limits<double>::infinity();

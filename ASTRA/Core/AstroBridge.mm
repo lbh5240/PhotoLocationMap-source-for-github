@@ -7,7 +7,8 @@
 @end
 static astra::Analysis unpack(NSDictionary *d) {
     astra::Analysis a;
-    for(NSArray *p in d[@"stars"])a.stars.push_back({[p[0] doubleValue],[p[1] doubleValue],[p[2] doubleValue],[p[3] doubleValue]});return a;
+    for(NSArray *p in d[@"stars"])a.stars.push_back({[p[0] doubleValue],[p[1] doubleValue],[p[2] doubleValue],[p[3] doubleValue]});
+    a.background=[d[@"background"] doubleValue];a.noise=[d[@"noise"] doubleValue];return a;
 }
 @implementation AstroBridge
 + (NSDictionary *)analyzePixels:(NSData *)pixels width:(NSInteger)w height:(NSInteger)h skyFraction:(double)sky {
@@ -20,7 +21,7 @@ static astra::Analysis unpack(NSDictionary *d) {
 }
 + (NSDictionary *)alignReference:(NSDictionary *)reference source:(NSDictionary *)source scale:(double)scale referencePath:(NSString *)referencePath sourcePath:(NSString *)sourcePath width:(NSInteger)w height:(NSInteger)h {
     try{auto t=astra::registerFrame(unpack(reference),unpack(source),scale,
-                                  {[referencePath UTF8String],{},1,true},{[sourcePath UTF8String],{},1,true},(int)w,(int)h);return @{@"a":@(t.a),@"b":@(t.b),@"tx":@(t.tx),@"ty":@(t.ty),@"matches":@(t.matches),@"rms":@(t.rms)};}
+                                  {[referencePath UTF8String],{},1,true},{[sourcePath UTF8String],{},1,true},(int)w,(int)h);return @{@"a":@(t.a),@"b":@(t.b),@"tx":@(t.tx),@"ty":@(t.ty),@"matches":@(t.matches),@"rms":@(t.rms),@"gain":@(t.gain),@"offset":@(t.offset)};}
     catch(const std::exception& e){return @{@"error":[NSString stringWithUTF8String:e.what()]};}
 }
 + (NSString *)stackFrames:(NSArray<NSDictionary *> *)frames width:(NSInteger)w height:(NSInteger)h mode:(NSInteger)mode sigma:(double)sigma skyFraction:(double)sky feather:(double)feather destination:(NSString *)destination token:(ASCancelToken *)token progress:(void (^)(double))progress {
@@ -29,7 +30,7 @@ static astra::Analysis unpack(NSDictionary *d) {
         for(NSDictionary *d in frames) {
             astra::Transform t;
             t.a=[d[@"a"] doubleValue];t.b=[d[@"b"] doubleValue];t.tx=[d[@"tx"] doubleValue];t.ty=[d[@"ty"] doubleValue];
-            inputs.push_back({[d[@"path"] UTF8String],t,[d[@"weight"] doubleValue],[d[@"half"] boolValue] != NO});
+            inputs.push_back({[d[@"path"] UTF8String],t,[d[@"weight"] doubleValue],[d[@"half"] boolValue] != NO,[d[@"gain"] doubleValue] ?: 1,[d[@"offset"] doubleValue]});
         }
         astra::Settings cfg;cfg.mode=(astra::Mode)mode;cfg.sigma=sigma;cfg.skyFraction=sky;cfg.feather=feather;
         astra::stack(inputs,(int)w,(int)h,cfg,[destination UTF8String],token->_flag,[&](double p){progress(p);});return nil;
