@@ -31,6 +31,7 @@ public final class MainActivity extends Activity {
     volatile Project project;
     private Button importButton, exportButton;
     private int section, range, previewGeneration;
+    private boolean cancellable;
     private Bitmap displayed;
     private Runnable pendingPreview;
 
@@ -70,8 +71,8 @@ public final class MainActivity extends Activity {
         LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(0,dp(44),1);params.setMargins(dp(3),0,dp(3),0);b.setLayoutParams(params);b.setOnClickListener(v->action.run());return b;
     }
     private void setStatus(String value){status.setText(value);}
-    private void begin(String value){busy=true;progress.setProgress(0);progress.setVisibility(View.VISIBLE);setStatus(value);importButton.setEnabled(false);exportButton.setEnabled(false);stackButton.setText("取消");}
-    private void finish(){busy=false;progress.setVisibility(View.GONE);importButton.setEnabled(true);exportButton.setEnabled(true);stackButton.setText("开始合成");showPanel();}
+    private void begin(String value){busy=true;progress.setProgress(0);progress.setVisibility(View.VISIBLE);setStatus(value);importButton.setEnabled(false);exportButton.setEnabled(false);cancellable=false;stackButton.setText("处理中");stackButton.setEnabled(false);}
+    private void endOperation(){busy=false;progress.setVisibility(View.GONE);importButton.setEnabled(true);exportButton.setEnabled(true);cancellable=false;stackButton.setEnabled(true);stackButton.setText("开始合成");showPanel();}
     private void remember(){getPreferences(0).edit().putString("active",project.directory.getName()).apply();heading.setText("ASTRA · "+project.name);}
     private void save(){try{project.save();}catch(Exception e){setStatus("保存失败："+e.getMessage());}}
     private void newProject(){
@@ -124,8 +125,8 @@ public final class MainActivity extends Activity {
                 }catch(Exception|OutOfMemoryError error){errors.add(name+"："+error.getMessage());if(original!=null)original.delete();if(cache!=null)cache.delete();}
                 final int done=i+1;runOnUiThread(()->{progress.setProgress(done*1000/sources.size());setStatus("导入 "+done+" / "+sources.size());});
             }
-            try{target.frames.addAll(imported);target.save();runOnUiThread(()->{finish();setStatus("已导入 "+imported.size()+" 张"+(errors.isEmpty()?"":"，失败 "+errors.size()+" 张\n"+errors.get(0)));schedulePreview();});}
-            catch(Exception error){target.frames.removeAll(imported);for(Project.Frame frame:imported){target.file(frame.original).delete();target.file(frame.cache).delete();}runOnUiThread(()->{finish();setStatus("保存导入失败："+error.getMessage());});}
+            try{target.frames.addAll(imported);target.save();runOnUiThread(()->{endOperation();setStatus("已导入 "+imported.size()+" 张"+(errors.isEmpty()?"":"，失败 "+errors.size()+" 张\n"+errors.get(0)));schedulePreview();});}
+            catch(Exception error){target.frames.removeAll(imported);for(Project.Frame frame:imported){target.file(frame.original).delete();target.file(frame.cache).delete();}runOnUiThread(()->{endOperation();setStatus("保存导入失败："+error.getMessage());});}
         });
     }
     private void showPanel(){
@@ -160,20 +161,20 @@ public final class MainActivity extends Activity {
         new AlertDialog.Builder(this).setTitle("参与合成的照片").setMultiChoiceItems(names,selected,(d,i,on)->project.frames.get(i).included=on).setPositiveButton("完成",(d,i)->save()).show();
     }
     void startStack(){
-        if(busy){NativeEngine.cancel();setStatus("正在安全停止…");return;}if(project==null)return;
+        if(busy){if(cancellable){NativeEngine.cancel();setStatus("正在安全停止…");}return;}if(project==null)return;
         ArrayList<Project.Frame> selected=new ArrayList<>();for(Project.Frame f:project.frames)if(f.included)selected.add(f);
         if(selected.size()<2){setStatus("无法合成。请在照片列表选择至少两张照片。");return;}
         int width=selected.get(0).width,height=selected.get(0).height;
         for(Project.Frame frame:selected)if(frame.width!=width||frame.height!=height){setStatus("无法合成。照片尺寸不同，请排除裁切或方向不同的照片。");return;}
         Project target=project;String master="Master-"+UUID.randomUUID()+".rgba";int mode=target.mode;double sky=target.sky;
-        String[] caches=selected.stream().map(f->target.file(f.cache).getPath()).toArray(String[]::new);begin("准备合成");
+        String[] caches=selected.stream().map(f->target.file(f.cache).getPath()).toArray(String[]::new);begin("准备合成");cancellable=true;stackButton.setText("取消");stackButton.setEnabled(true);
         worker.execute(()->{
             try{
                 int count=NativeEngine.stack(caches,width,height,mode,sky,target.file(master).getPath(),(value,stage)->runOnUiThread(()->{progress.setProgress((int)(value*1000));setStatus(stage+" "+(int)(value*100)+"%");}));
                 String old=target.master;int oldWidth=target.width,oldHeight=target.height,oldAccepted=target.accepted;target.master=master;target.width=width;target.height=height;target.accepted=count;
                 try{target.save();}catch(Exception error){target.master=old;target.width=oldWidth;target.height=oldHeight;target.accepted=oldAccepted;target.file(master).delete();throw error;}
-                if(old!=null)target.file(old).delete();runOnUiThread(()->{finish();setStatus("合成完成 · "+count+" 帧 · "+width+"×"+height+"\n可以继续调色或导出");schedulePreview();});
-            }catch(Exception|OutOfMemoryError error){runOnUiThread(()->{finish();setStatus("合成失败 · "+error.getMessage());});}
+                if(old!=null)target.file(old).delete();runOnUiThread(()->{endOperation();setStatus("合成完成 · "+count+" 帧 · "+width+"×"+height+"\n可以继续调色或导出");schedulePreview();});
+            }catch(Exception|OutOfMemoryError error){runOnUiThread(()->{endOperation();setStatus("合成失败 · "+error.getMessage());});}
         });
     }
     private void schedulePreview(){
@@ -200,8 +201,8 @@ public final class MainActivity extends Activity {
                     Bitmap output=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);NativeEngine.render(target.file(path).getPath(),w,h,output,target.exposure,target.contrast,target.saturation,target.warmth,target.wheels);
                     File file=target.file("ASTRA-"+UUID.randomUUID()+(index==0?".jpg":".png"));
                     try(OutputStream stream=new FileOutputStream(file)){if(!output.compress(index==0?Bitmap.CompressFormat.JPEG:Bitmap.CompressFormat.PNG,96,stream))throw new IOException("编码失败");}finally{output.recycle();}
-                    runOnUiThread(()->{finish();setStatus("已导出全分辨率成片");Uri uri=FileProvider.getUriForFile(this,"com.astra.starrynight.files",file);Intent share=new Intent(Intent.ACTION_SEND).setType(index==0?"image/jpeg":"image/png").putExtra(Intent.EXTRA_STREAM,uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);startActivity(Intent.createChooser(share,"分享成片"));});
-                }catch(Exception|OutOfMemoryError error){runOnUiThread(()->{finish();setStatus("导出失败："+error.getMessage());});}
+                    runOnUiThread(()->{endOperation();setStatus("已导出全分辨率成片");Uri uri=FileProvider.getUriForFile(this,"com.astra.starrynight.files",file);Intent share=new Intent(Intent.ACTION_SEND).setType(index==0?"image/jpeg":"image/png").putExtra(Intent.EXTRA_STREAM,uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);startActivity(Intent.createChooser(share,"分享成片"));});
+                }catch(Exception|OutOfMemoryError error){runOnUiThread(()->{endOperation();setStatus("导出失败："+error.getMessage());});}
             });
         }).show();
     }
