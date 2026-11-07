@@ -23,4 +23,16 @@ rgba.frombytes(master)
 assert all(math.isfinite(value) for value in rgba)
 assert sum(alpha > 0 for alpha in rgba[3::4]) > 384 * 256 * .9
 assert max(rgba[0::4]) > .3
+# The isolated narrow line must stay single and sharp instead of spreading over
+# the three input positions (x=20,22,24).
+profile = [sum(rgba[(y * 384 + x) * 4] for y in range(119, 137)) / 18 for x in range(15, 30)]
+peak = max(profile)
+assert peak > .65, f"Drift blurred the filament: {profile}"
+assert sum(v > peak * .5 for v in profile) <= 2, f"Filament became wider or doubled: {profile}"
+vertical_profile = [sum(rgba[(y * 384 + x) * 4] for x in range(359, 368)) / 9 for y in range(119, 137)]
+vertical_peak = max(vertical_profile)
+assert vertical_peak > .65, f"Vertical drift or a cache strip boundary blurred the filament: {vertical_profile}"
+assert sum(v > vertical_peak * .5 for v in vertical_profile) <= 2, vertical_profile
+measured = [frame["registrationRMS"] for frame in project["frames"]]
+assert all(0 <= residual <= .65 for residual in measured), measured
 print('Verified output: 3 imported PNGs, 384x256, valid combined pixels, temporary decode files removed')

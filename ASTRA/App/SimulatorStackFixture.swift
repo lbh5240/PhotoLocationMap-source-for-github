@@ -28,6 +28,23 @@ enum SimulatorStackFixture {
                     }
                 }
             }
+            // A narrow, star-free filament shifts with the stars and crosses cache strip boundaries.
+            for y in (104 - frame)..<(151 - frame) {
+                for x in 14..<31 {
+                    let dx = Double(x - 20 - frame * 2)
+                    let value = Int(210 * exp(-dx * dx / 1.65))
+                    let offset = (y * width + x) * 4
+                    for channel in 0..<3 { rgba[offset + channel] = UInt8(min(255, Int(rgba[offset + channel]) + value)) }
+                }
+            }
+            for y in 119..<137 {
+                for x in 353..<375 {
+                    let dy = Double(y - 128 + frame)
+                    let value = Int(210 * exp(-dy * dy / 1.65))
+                    let offset = (y * width + x) * 4
+                    for channel in 0..<3 { rgba[offset + channel] = UInt8(min(255, Int(rgba[offset + channel]) + value)) }
+                }
+            }
             let data = Data(rgba)
             let provider = CGDataProvider(data: data as CFData)!
             let image = CGImage(width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32,

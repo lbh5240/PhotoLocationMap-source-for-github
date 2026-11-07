@@ -97,7 +97,7 @@ extern "C" JNIEXPORT jint JNICALL Java_com_astra_starrynight_NativeEngine_stack(
         for(int i=0;i<count;i++){
             if(cancelled.load())throw std::runtime_error("合成已取消");
             astra::Transform transform;
-            try{if(i!=reference&&mode!=2)transform=astra::liftToFullResolution(astra::align(analyses[reference],analyses[i]),scale);}
+            try{if(i!=reference&&mode!=2)transform=astra::registerFrame(analyses[reference],analyses[i],scale,{names[reference],{},1},{names[i],{},1},w,h);}
             catch(const std::exception&){continue;}
             inputs.push_back({names[i],transform,std::max(.01,analyses[i].quality)});progress(.3+.15*(i+1)/count,"星点配准");
         }

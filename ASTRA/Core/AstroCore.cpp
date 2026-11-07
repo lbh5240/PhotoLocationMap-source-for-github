@@ -4,6 +4,7 @@
 #include <cmath>
 #include <stdexcept>
 #include <numeric>
+#include <optional>
 #include <limits>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -104,18 +105,64 @@ struct Window {
         data=static_cast<const char*>(ptr)+(start-base);
     }
     ~Window(){if(ptr!=MAP_FAILED)munmap(ptr,len);}
+    float channel(int x,int y,int c) const {
+        const size_t index=(size_t(y-first)*width+x)*4+c;
+        return half ? unpackHalf(reinterpret_cast<const uint16_t*>(data)[index]) : reinterpret_cast<const float*>(data)[index];
+    }
     bool sample(int h,double x,double y,float* out) const {
         if(!std::isfinite(x)||!std::isfinite(y)||x<0||y<0||x>width-1||y>h-1)return false;
         int x0=int(x),y0=int(y),x1=std::min(x0+1,width-1),y1=std::min(y0+1,h-1);
         if(y0<first||y1>last)return false;
         double fx=x-x0,fy=y-y0;
         for(int c=0;c<3;c++) {
-            auto at=[&](int px,int py){const auto index=(size_t(py-first)*width+px)*4+c;return half ? unpackHalf(reinterpret_cast<const uint16_t*>(data)[index]) : reinterpret_cast<const float*>(data)[index];};
+            auto at=[&](int px,int py){return channel(px,py,c);};
             out[c]=float((1-fy)*((1-fx)*at(x0,y0)+fx*at(x1,y0))+fy*((1-fx)*at(x0,y1)+fx*at(x1,y1)));
             if(!std::isfinite(out[c]))return false;
         } return true;
     }
 };
+// Measure the same stars again on the native grid. A local background plane
+// keeps gradients from nebulosity from pulling the centroid in one direction.
+std::optional<Star> refineStar(int fd,bool half,int w,int h,double x,double y,int search,int aperture) {
+    const int ix=int(std::round(x)),iy=int(std::round(y)),ring=aperture+2,margin=search+ring;
+    if(ix<margin||iy<margin||ix>=w-margin||iy>=h-margin)return {};
+    Window pixels(fd,w,h,iy-margin,iy+margin,half);
+    auto luma=[&](int px,int py) {
+        return .2126*pixels.channel(px,py,0)+.7152*pixels.channel(px,py,1)+.0722*pixels.channel(px,py,2);
+    };
+    auto patch=[&](int px,int py) {
+        return (luma(px-1,py)+luma(px+1,py)+luma(px,py-1)+luma(px,py+1)+2*luma(px,py))/6;
+    };
+    double best=0;
+    int px=ix,py=iy;
+    for(int dy=-search;dy<=search;dy++)for(int dx=-search;dx<=search;dx++) {
+        if(dx*dx+dy*dy>search*search)continue;
+        const int u=ix+dx,v=iy+dy;
+        const double surround=(luma(u-ring,v)+luma(u+ring,v)+luma(u,v-ring)+luma(u,v+ring))/4;
+        const double score=(patch(u,v)-surround)/(1+.08*(dx*dx+dy*dy));
+        if(score>best){best=score;px=u;py=v;}
+    }
+    if(best<=1e-7)return {};
+    const double left=patch(px-ring+1,py),right=patch(px+ring-1,py);
+    const double bottom=patch(px,py-ring+1),top=patch(px,py+ring-1);
+    const double bg=(left+right+bottom+top)/4;
+    const double gx=(right-left)/(2*(ring-1)),gy=(top-bottom)/(2*(ring-1));
+    const double peak=luma(px,py)-bg;
+    if(!std::isfinite(peak)||peak<=1e-7)return {};
+    double mass=0,sx=0,sy=0,secondMoment=0;
+    for(int dy=-aperture;dy<=aperture;dy++)for(int dx=-aperture;dx<=aperture;dx++) {
+        if(dx*dx+dy*dy>aperture*aperture)continue;
+        const double signal=luma(px+dx,py+dy)-bg-gx*dx-gy*dy;
+        if(signal<peak*.06)continue;
+        mass+=signal;sx+=signal*dx;sy+=signal*dy;secondMoment+=signal*(dx*dx+dy*dy);
+    }
+    if(!std::isfinite(mass)||mass<=0)return {};
+    sx/=mass;sy/=mass;
+    const double variance=secondMoment/mass-sx*sx-sy*sy;
+    if(variance<.16||std::hypot(sx,sy)>2)return {};
+    return Star{px+sx,py+sy,mass,std::sqrt(variance)};
+}
+
 void writeAll(int fd,const void* data,size_t n) {
     const char* p=static_cast<const char*>(data);
     while(n) {ssize_t r=write(fd,p,n);if(r<0&&errno==EINTR)continue;if(r<=0)throw std::runtime_error("Cannot write result (storage full?)");p+=r;n-=size_t(r);}
@@ -184,6 +231,53 @@ Transform liftToFullResolution(Transform t,double scale) {
     t.tx=t.tx/scale+(t.a-t.b-1)*(scale-1)/(2*scale);
     t.ty=t.ty/scale+(t.a+t.b-1)*(scale-1)/(2*scale);
     t.rms/=scale;return t;
+}
+
+Transform registerFrame(const Analysis& ref,const Analysis& src,double scale,
+                        const Input& refPixels,const Input& srcPixels,int w,int h) {
+    const Transform coarse=align(ref,src);
+    const auto pairs=match(ref.stars,src.stars,coarse,1.8);
+    const Transform initial=liftToFullResolution(coarse,scale);
+    const int search=std::clamp(int(std::ceil(1.6/scale)),2,24);
+    const int aperture=std::clamp(int(std::ceil(1.5/scale)),3,9);
+    File reference(refPixels.path,size_t(w)*h*(refPixels.half?8:16));
+    File source(srcPixels.path,size_t(w)*h*(srcPixels.half?8:16));
+    std::vector<Star> r,s;
+    std::vector<Match> inliers;
+    for(const auto pair:pairs) {
+        const auto star=ref.stars[pair.r];
+        const auto center=[&](double v){return (v+.5)/scale-.5;};
+        const auto a=refineStar(reference.fd,refPixels.half,w,h,center(star.x),center(star.y),search,aperture);
+        if(!a)continue;
+        const auto predicted=map(initial,a->x,a->y);
+        const auto b=refineStar(source.fd,srcPixels.half,w,h,predicted.first,predicted.second,search,aperture);
+        if(!b)continue;
+        const int index=int(r.size());
+        r.push_back(*a);s.push_back(*b);inliers.push_back({index,index});
+    }
+    const size_t required=std::max<size_t>(8,(pairs.size()+2)/3);
+    const auto fail=[] {throw std::runtime_error("全分辨率星点校验未通过，已排除此帧以避免拖糊结果");};
+    for(int iteration=0;iteration<4;iteration++) {
+        if(inliers.size()<required)fail();
+        const Transform refined=fit(r,s,inliers);
+        std::vector<double> errors;
+        for(const auto p:inliers) {
+            const auto q=map(refined,r[p.r].x,r[p.r].y);
+            errors.push_back(std::hypot(q.first-s[p.s].x,q.second-s[p.s].y));
+        }
+        const double cutoff=std::clamp(2.8*median(errors),.55,iteration==0?double(search):1.1);
+        std::vector<Match> kept;
+        for(size_t i=0;i<inliers.size();i++)if(errors[i]<=cutoff)kept.push_back(inliers[i]);
+        inliers=std::move(kept);
+    }
+    if(inliers.size()<required)fail();
+    const Transform result=fit(r,s,inliers);
+    if(result.rms>.65||std::abs(result.a-initial.a)>.02||std::abs(result.b-initial.b)>.02)fail();
+    // Reject frames with visibly wider stellar profiles across the matched field.
+    std::vector<double> widths;
+    for(const auto p:inliers)widths.push_back(s[p.s].radius/std::max(.5,r[p.r].radius));
+    if(median(widths)>1.55)throw std::runtime_error("星点明显比参考帧宽，已排除可能失焦或拖线的帧");
+    return result;
 }
 
 void stack(const std::vector<Input>& inputs,int w,int h,const Settings& cfg,const std::string& output,std::atomic<bool>& cancel,const std::function<void(double)>& progress) {

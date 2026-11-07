@@ -17,6 +17,9 @@ Analysis analyze(const float* rgba, int width, int height, double skyFraction=1)
 Transform align(const Analysis& reference, const Analysis& source);
 Transform liftToFullResolution(Transform proxyTransform, double proxyScale);
 struct Input { std::string path; Transform transform; double weight=1; bool half=false; };
+// Refine coarse matching from full-resolution linear pixels before any frame enters the stack.
+Transform registerFrame(const Analysis& reference, const Analysis& source, double proxyScale,
+                        const Input& referencePixels, const Input& sourcePixels, int width, int height);
 enum class Mode { sky=0, landscape=1, trails=2 };
 struct Settings {
     Mode mode=Mode::sky;

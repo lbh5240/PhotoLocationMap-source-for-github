@@ -307,7 +307,7 @@ struct WorkspaceView: View {
                 }), range: 1.5...5, neutral: StackConfiguration().sigma, step: 0.1, precision: 1, unit: "σ")
                 Text("至少 5 帧启用稳健剔除，2–4 帧使用加权平均。").font(.caption2).foregroundStyle(.secondary)
             } else {
-                Text("最大值混合会保留飞机与卫星光带。请在照片列表排除不需要的帧。").font(.caption2).foregroundStyle(.secondary)
+                Text("星轨模式保留星星移动的轨迹。叠加星云请选「星空对齐」。").font(.caption2).foregroundStyle(.secondary)
             }
         }.disabled(store.busy)
     }

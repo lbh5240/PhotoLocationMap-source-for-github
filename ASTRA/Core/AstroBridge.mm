@@ -18,8 +18,9 @@ static astra::Analysis unpack(NSDictionary *d) {
         return @{@"stars":stars,@"quality":@(a.quality),@"noise":@(a.noise),@"background":@(a.background)};
     }catch(...){return @{@"stars":@[],@"quality":@0};}
 }
-+ (NSDictionary *)alignReference:(NSDictionary *)reference source:(NSDictionary *)source scale:(double)scale {
-    try{auto t=astra::liftToFullResolution(astra::align(unpack(reference),unpack(source)),scale);return @{@"a":@(t.a),@"b":@(t.b),@"tx":@(t.tx),@"ty":@(t.ty),@"matches":@(t.matches),@"rms":@(t.rms)};}
++ (NSDictionary *)alignReference:(NSDictionary *)reference source:(NSDictionary *)source scale:(double)scale referencePath:(NSString *)referencePath sourcePath:(NSString *)sourcePath width:(NSInteger)w height:(NSInteger)h {
+    try{auto t=astra::registerFrame(unpack(reference),unpack(source),scale,
+                                  {[referencePath UTF8String],{},1,true},{[sourcePath UTF8String],{},1,true},(int)w,(int)h);return @{@"a":@(t.a),@"b":@(t.b),@"tx":@(t.tx),@"ty":@(t.ty),@"matches":@(t.matches),@"rms":@(t.rms)};}
     catch(const std::exception& e){return @{@"error":[NSString stringWithUTF8String:e.what()]};}
 }
 + (NSString *)stackFrames:(NSArray<NSDictionary *> *)frames width:(NSInteger)w height:(NSInteger)h mode:(NSInteger)mode sigma:(double)sigma skyFraction:(double)sky feather:(double)feather destination:(NSString *)destination token:(ASCancelToken *)token progress:(void (^)(double))progress {

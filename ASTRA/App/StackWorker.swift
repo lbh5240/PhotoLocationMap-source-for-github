@@ -68,14 +68,15 @@ enum StackWorker {
         var accepted: [[String: Any]] = []
         for (step, i) in selected.enumerated() {
             if token.isCancelled() { throw CancellationError() }
-            progress(0.45 + Double(step) / Double(selected.count) * 0.08, "自动对齐 \(step + 1) / \(selected.count)")
+            progress(0.45 + Double(step) / Double(selected.count) * 0.08, "全尺寸星点对齐 \(step + 1) / \(selected.count)")
             var t: [AnyHashable: Any] = ["a": 1.0, "b": 0.0, "tx": 0.0, "ty": 0.0, "rms": 0.0]
             if cfg.mode != .trails && i != reference {
                 if (frames[i].starCount ?? 0) < 8 {
                     frames[i].rejection = "可识别星点少于 8 个"
                     continue
                 }
-                t = AstroBridge.align(reference: analyses[reference]!, source: analyses[i]!, scale: proxyScales[i]!)
+                t = AstroBridge.align(reference: analyses[reference]!, source: analyses[i]!, scale: proxyScales[i]!,
+                                      referencePath: cacheURL(reference).path, sourcePath: cacheURL(i).path, width: w, height: h)
                 if let error = t["error"] as? String {
                     frames[i].rejection = error
                     try? FileManager.default.removeItem(at: cacheURL(i))
@@ -89,7 +90,11 @@ enum StackWorker {
             // Geometry uses pixel-center coordinates at each scale.
             accepted.append(["path": cacheURL(i).path, "half": true, "a": a, "b": b, "tx": tx, "ty": ty, "weight": max(0.01, min(100, frames[i].quality ?? 1))])
         }
-        guard accepted.count >= 2 else { throw AstroError.message("选中的 \(selected.count) 张照片中只有 \(accepted.count) 张对齐成功。请使用同一片天空的照片，排除云层、拖尾或构图差异过大的帧。") }
+        guard accepted.count >= 2 else {
+            let reasons = selected.compactMap { frames[$0].rejection }.prefix(2).joined(separator: "；")
+            let detail = reasons.isEmpty ? "" : "\n\(reasons)"
+            throw AstroError.message("选中的 \(selected.count) 张照片中只有 \(accepted.count) 张对齐成功。请使用同一片天空的清晰照片。\(detail)")
+        }
         let fileName = "Master-\(UUID().uuidString).rgba"
         let out = repository.url(project, fileName)
         if let error = AstroBridge.stack(frames: accepted, width: w, height: h, mode: cfg.mode.rawValue, sigma: cfg.sigma, skyFraction: cfg.skyFraction, feather: cfg.feather, destination: out.path, token: token, progress: { p in progress(0.53 + p * 0.47, "合成真实像素 \(Int(p * 100))%") }) {

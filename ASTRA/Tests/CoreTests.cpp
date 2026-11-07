@@ -52,6 +52,64 @@ int main(int argc,char** argv) {
         auto integratedImage=load(dir+"/integrated-result",aw,ah);auto stackedStars=analyze(integratedImage.data(),aw,ah);auto measuredFinal=align(reference,stackedStars);
         check(std::abs(measuredFinal.tx)<.15&&std::abs(measuredFinal.ty)<.15&&measuredFinal.rms<.18,"full pixel pipeline preserves star centroids");
         std::cout<<"PASS integrated detection -> registration -> pixel stack: "<<measuredFinal.rms<<" px RMS\n";
+        // Simulate a bright diffuse nebula with a thin filament and a moving star
+        // field. The downsampled centroids have a coherent phase error.
+        const int nw=768,nh=512;
+        const double proxy=.25;
+        std::vector<Star> nebulaStars;
+        for(int i=0;i<42;i++){
+            const double x=xy(gen)+65,y=xy(gen);
+            if(std::hypot(x-384,y-253)>70)nebulaStars.push_back({x,y,.32-i*.003,1.3});
+        }
+        std::vector<Input> coarseInputs, refinedInputs;
+        std::vector<float> clean;
+        Analysis nebulaReference;
+        for(int frame=0;frame<5;frame++){
+            const double angle=frame*.002,dx=2.75*frame,dy=-1.55*frame;
+            const double a=std::cos(angle),b=std::sin(angle);
+            std::vector<float> raster(size_t(nw)*nh*4);
+            for(int y=0;y<nh;y++)for(int x=0;x<nw;x++){
+                const double u=a*(x-dx)+b*(y-dy)-384,v=-b*(x-dx)+a*(y-dy)-253;
+                const double filament=(v-.003*u*u)/1.9;
+                const double value=.01+.09*std::exp(-(u*u+2*v*v)/7000)+
+                    .18*std::exp(-u*u/1300-filament*filament/2);
+                const size_t i=(size_t(y)*nw+x)*4;
+                raster[i]=raster[i+1]=raster[i+2]=float(value);raster[i+3]=1;
+            }
+            Analysis measured;
+            for(const auto star:nebulaStars){
+                const double x=a*star.x-b*star.y+dx,y=b*star.x+a*star.y+dy;
+                for(int v=int(y)-5;v<=int(y)+5;v++)for(int u=int(x)-5;u<=int(x)+5;u++){
+                    const float value=float(star.flux*std::exp(-((x-u)*(x-u)+(y-v)*(y-v))/3.2));
+                    for(int c=0;c<3;c++)raster[(size_t(v)*nw+u)*4+c]+=value;
+                }
+                const double bias=frame==0?0:.37;
+                measured.stars.push_back({(x+.5)*proxy-.5+bias,(y+.5)*proxy-.5-bias*.65,star.flux,1});
+            }
+            Input input{dir+"/nebula-"+std::to_string(frame),{},1};
+            save(input.path,raster);
+            if(frame==0){nebulaReference=measured;clean=raster;}
+            auto coarse=input;
+            if(frame>0){
+                coarse.transform=liftToFullResolution(align(nebulaReference,measured),proxy);
+                input.transform=registerFrame(nebulaReference,measured,proxy,refinedInputs.front(),input,nw,nh);
+                check(input.transform.rms<.25 && std::hypot(input.transform.tx-dx,input.transform.ty-dy)<.3,
+                      "native-grid registration recovers true nebula drift");
+            }
+            coarseInputs.push_back(coarse);refinedInputs.push_back(input);
+        }
+        const auto nebulaPath=dir+"/nebula-result";
+        stack(coarseInputs,nw,nh,integratedConfig,nebulaPath+"-coarse",integratedCancel,[](double){});
+        stack(refinedInputs,nw,nh,integratedConfig,nebulaPath,integratedCancel,[](double){});
+        const auto coarseImage=load(nebulaPath+"-coarse",nw,nh), refinedImage=load(nebulaPath,nw,nh);
+        double coarseError=0,refinedError=0;
+        for(int y=242;y<=275;y++)for(int x=344;x<=424;x++){
+            const auto i=(size_t(y)*nw+x)*4;
+            coarseError+=std::pow(clean[i]-coarseImage[i],2);
+            refinedError+=std::pow(clean[i]-refinedImage[i],2);
+        }
+        check(refinedError<coarseError*.20,"full-resolution registration preserves the nebula filament");
+        std::cout<<"PASS nebula detail after rotation and drift, refined/coarse MSE="<<refinedError/coarseError<<"\n";
         int w=96,h=80;std::vector<Input> ins;std::normal_distribution<float> n(0,.02);double inputVar=0;
         for(int f=0;f<15;f++){std::vector<float> v(size_t(w)*h*4);for(int p=0;p<w*h;p++){float delta=n(gen);inputVar+=delta*delta;for(int c=0;c<3;c++)v[p*4+c]=.25f+delta;v[p*4+3]=1;}if(f==3)for(int c=0;c<3;c++)v[(30*w+40)*4+c]=8;std::string p=dir+"/f"+std::to_string(f);save(p,v);ins.push_back({p,{},1});}
         Settings cfg;std::atomic<bool> cancel(false);double progress=0;std::string output=dir+"/result";
