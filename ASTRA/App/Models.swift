@@ -22,6 +22,7 @@ struct StackConfiguration: Codable, Equatable, Sendable {
     var skyFraction: Double = 0.65
     var feather: Double = 0.04
     var halfResolution: Bool?
+    var hdrFusion: Bool?
 }
 struct HSLBand: Codable, Equatable, Sendable {
     var hue: Double = 0
@@ -66,6 +67,13 @@ struct Adjustments: Codable, Equatable, Sendable {
     var hsl: [HSLBand] = Array(repeating: HSLBand(), count: 6)
     // Optional for projects and undo histories saved before color grading.
     var colorGrading: ColorGrading?
+    // Optional fields keep existing saved projects and undo history decodable.
+    var autoSTF: Bool?
+    var arcsinh: Double?
+    var maskedStretch: Double?
+    var gradientRemoval: Double?
+    var nebulaContrast: Double?
+    var starProtection: Double?
     static let neutral = Adjustments()
 }
 struct FrameRecord: Identifiable, Codable, Sendable {

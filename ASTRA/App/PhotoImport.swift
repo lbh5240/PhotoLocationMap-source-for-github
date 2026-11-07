@@ -1,6 +1,7 @@
 import CoreTransferable
 import Foundation
 import ImageIO
+import Photos
 import PhotosUI
 import SwiftUI
 import UniformTypeIdentifiers
@@ -24,6 +25,15 @@ enum PhotoImportSource: Sendable {
         }
     }
 
+    func availableFormats() async -> Set<PhotoFormat> {
+        guard case .library(let item) = self, item.itemIdentifier != nil else { return formats }
+        if let resources = await OriginalPhotoResource.resources(for: item) {
+            let available = Set(resources.map { OriginalPhotoResource.isRAW($0) ? PhotoFormat.raw : .processed })
+            if !available.isEmpty { return available }
+        }
+        return formats
+    }
+
     func displayName(at index: Int) -> String {
         switch self {
         case .file(let url): url.lastPathComponent
@@ -41,7 +51,11 @@ enum PhotoImportSource: Sendable {
             let photo: SelectedPhotoFile?
             let requested = format ?? (formats == [.raw] ? .raw : .processed)
             if requested == .raw {
-                photo = try await item.loadTransferable(type: RAWPhotoFile.self)?.file
+                if let resource = await OriginalPhotoResource.resources(for: item)?.first(where: OriginalPhotoResource.isRAW) {
+                    photo = try await OriginalPhotoResource.stage(resource)
+                } else {
+                    photo = try await item.loadTransferable(type: RAWPhotoFile.self)?.file
+                }
             } else if item.supportedContentTypes.contains(where: { $0.conforms(to: .jpeg) }) {
                 photo = try await item.loadTransferable(type: JPEGPhotoFile.self)?.file
             } else {
@@ -92,6 +106,39 @@ private struct SelectedPhotoFile: Transferable, Sendable {
             return SelectedPhotoFile(directory: directory, url: copy, format: format)
         } catch {
             try? files.removeItem(at: directory)
+            throw error
+        }
+    }
+}
+
+private enum OriginalPhotoResource {
+    static func isRAW(_ resource: PHAssetResource) -> Bool {
+        let type = UTType(resource.uniformTypeIdentifier)
+        return type?.conforms(to: .rawImage) == true ||
+            StackSelection.rawExtensions.contains((resource.originalFilename as NSString).pathExtension.lowercased())
+    }
+
+    static func resources(for item: PhotosPickerItem) async -> [PHAssetResource]? {
+        guard let identifier = item.itemIdentifier else { return nil }
+        let status = await PHPhotoLibrary.requestAuthorization(for: .readWrite)
+        guard status == .authorized || status == .limited else { return nil }
+        guard let asset = PHAsset.fetchAssets(withLocalIdentifiers: [identifier], options: nil).firstObject else { return nil }
+        return PHAssetResource.assetResources(for: asset).filter { $0.type == .photo || $0.type == .alternatePhoto }
+    }
+
+    static func stage(_ resource: PHAssetResource) async throws -> SelectedPhotoFile {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("ASTRA-Photo-\(UUID())", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: false)
+        let filename = (resource.originalFilename as NSString).lastPathComponent
+        let url = folder.appendingPathComponent(filename.isEmpty ? "Original.nef" : filename)
+        let options = PHAssetResourceRequestOptions()
+        options.isNetworkAccessAllowed = true
+        do {
+            try await PHAssetResourceManager.default().writeData(for: resource, toFile: url, options: options)
+            guard isRAW(resource) else { throw AstroError.message("相册返回的原件并非 RAW。") }
+            return SelectedPhotoFile(directory: folder, url: url, format: .raw)
+        } catch {
+            try? FileManager.default.removeItem(at: folder)
             throw error
         }
     }

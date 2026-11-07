@@ -11,7 +11,7 @@ struct StackNotice {
 }
 
 enum PhotoFormatRequest {
-    case importing([PhotoImportSource], title: String)
+    case importing([PhotoImportSource], available: [Set<PhotoFormat>], title: String)
     case stacking
 
     var title: String {
@@ -27,6 +27,8 @@ private actor PreviewWorker {
     private var key: URL?
     private var proxy: CIImage?
     private var before: CGImage?
+    private var astroProfile: AstroProfile?
+    private var beforeSTF: Bool?
 
     func render(project: AstroProject, repository: ProjectRepository) throws -> (CGImage, CGImage) {
         try Task.checkCancellation()
@@ -38,13 +40,21 @@ private actor PreviewWorker {
                 let source = try project.result.map { try pipeline.master($0, repository: repository, project: project) }
                     ?? pipeline.decode(url)
                 let image = try pipeline.previewSource(source)
-                before = try pipeline.preview(image: image, adjustments: .neutral)
+                astroProfile = project.result == nil ? nil : pipeline.astroProfile(image)
                 proxy = image
                 key = url
             }
             try Task.checkCancellation()
-            guard let proxy, let before else { throw AstroError.message("预览渲染失败") }
-            let after = project.adjustments == .neutral ? before : try pipeline.preview(image: proxy, adjustments: project.adjustments)
+            guard let proxy else { throw AstroError.message("预览渲染失败") }
+            let stf = project.result != nil && (project.adjustments.autoSTF ?? true)
+            if before == nil || beforeSTF != stf {
+                before = try pipeline.preview(image: proxy, adjustments: .neutral,
+                                              profile: astroProfile, autoSTF: stf)
+                beforeSTF = stf
+            }
+            guard let before else { throw AstroError.message("预览渲染失败") }
+            let after = try pipeline.preview(image: proxy, adjustments: project.adjustments,
+                                             profile: astroProfile, autoSTF: stf)
             return (after, before)
         }
     }
@@ -53,6 +63,8 @@ private actor PreviewWorker {
         key = nil
         proxy = nil
         before = nil
+        astroProfile = nil
+        beforeSTF = nil
         pipeline = nil
     }
 }
@@ -158,18 +170,21 @@ final class AppStore: ObservableObject {
     }
     private func prepareImport(_ sources: [PhotoImportSource], title: String) {
         guard !sources.isEmpty, !busy, project != nil else { return }
-        let formats = Set(sources.flatMap { $0.formats })
-        if formats.count > 1 {
-            formatRequest = .importing(sources, title: title)
-        } else {
-            importImages(sources, title: title, format: formats.first)
+        busy = true; status = "检查相册原件"; progress = 0
+        Task {
+            var available: [Set<PhotoFormat>] = []
+            for source in sources { available.append(await source.availableFormats()) }
+            let formats = Set(available.flatMap { $0 })
+            busy = false
+            if formats.count > 1 { formatRequest = .importing(sources, available: available, title: title) }
+            else { importImages(sources, title: title, format: formats.first) }
         }
     }
     func applyFormat(_ format: PhotoFormat, to request: PhotoFormatRequest) {
         formatRequest = nil
         switch request {
-        case .importing(let sources, let title):
-            importImages(sources.filter { $0.formats.contains(format) }, title: title, format: format)
+        case .importing(let sources, let available, let title):
+            importImages(zip(sources, available).compactMap { $0.1.contains(format) ? $0.0 : nil }, title: title, format: format)
         case .stacking:
             startStack(format: format)
         }

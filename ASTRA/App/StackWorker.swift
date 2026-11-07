@@ -122,7 +122,7 @@ enum StackWorker {
         }
         let fileName = "Master-\(UUID().uuidString).rgba"
         let out = repository.url(project, fileName)
-        if let error = AstroBridge.stack(frames: accepted, width: w, height: h, mode: cfg.mode.rawValue, sigma: cfg.sigma, skyFraction: cfg.skyFraction, feather: cfg.feather, destination: out.path, token: token, progress: { p in progress(0.53 + p * 0.47, "合成真实像素 \(Int(p * 100))%") }) {
+        if let error = AstroBridge.stack(frames: accepted, width: w, height: h, mode: cfg.mode.rawValue, sigma: cfg.sigma, skyFraction: cfg.skyFraction, feather: cfg.feather, hdrFusion: cfg.hdrFusion == true, destination: out.path, token: token, progress: { p in progress(0.53 + p * 0.47, "合成真实像素 \(Int(p * 100))%") }) {
             if token.isCancelled() { throw CancellationError() }
             throw AstroError.message(error)
         }

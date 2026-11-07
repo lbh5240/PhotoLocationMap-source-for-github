@@ -24,7 +24,7 @@ static astra::Analysis unpack(NSDictionary *d) {
                                   {[referencePath UTF8String],{},1,true},{[sourcePath UTF8String],{},1,true},(int)w,(int)h);return @{@"a":@(t.a),@"b":@(t.b),@"tx":@(t.tx),@"ty":@(t.ty),@"matches":@(t.matches),@"rms":@(t.rms),@"gain":@(t.gain),@"offset":@(t.offset)};}
     catch(const std::exception& e){return @{@"error":[NSString stringWithUTF8String:e.what()]};}
 }
-+ (NSString *)stackFrames:(NSArray<NSDictionary *> *)frames width:(NSInteger)w height:(NSInteger)h mode:(NSInteger)mode sigma:(double)sigma skyFraction:(double)sky feather:(double)feather destination:(NSString *)destination token:(ASCancelToken *)token progress:(void (^)(double))progress {
++ (NSString *)stackFrames:(NSArray<NSDictionary *> *)frames width:(NSInteger)w height:(NSInteger)h mode:(NSInteger)mode sigma:(double)sigma skyFraction:(double)sky feather:(double)feather hdrFusion:(BOOL)hdrFusion destination:(NSString *)destination token:(ASCancelToken *)token progress:(void (^)(double))progress {
     try {
         std::vector<astra::Input> inputs;
         for(NSDictionary *d in frames) {
@@ -32,7 +32,7 @@ static astra::Analysis unpack(NSDictionary *d) {
             t.a=[d[@"a"] doubleValue];t.b=[d[@"b"] doubleValue];t.tx=[d[@"tx"] doubleValue];t.ty=[d[@"ty"] doubleValue];
             inputs.push_back({[d[@"path"] UTF8String],t,[d[@"weight"] doubleValue],[d[@"half"] boolValue] != NO,[d[@"gain"] doubleValue] ?: 1,[d[@"offset"] doubleValue]});
         }
-        astra::Settings cfg;cfg.mode=(astra::Mode)mode;cfg.sigma=sigma;cfg.skyFraction=sky;cfg.feather=feather;
+        astra::Settings cfg;cfg.mode=(astra::Mode)mode;cfg.sigma=sigma;cfg.skyFraction=sky;cfg.feather=feather;cfg.hdrFusion=hdrFusion;
         astra::stack(inputs,(int)w,(int)h,cfg,[destination UTF8String],token->_flag,[&](double p){progress(p);});return nil;
     }catch(const std::exception& e){return [NSString stringWithUTF8String:e.what()];}
 }

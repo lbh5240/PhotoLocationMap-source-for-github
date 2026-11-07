@@ -36,6 +36,23 @@ final class StackFlowTests: XCTestCase {
     }
 
     @MainActor
+    func testHDRAndAstroScreenStretch() {
+        let app = launch(with: "exposure")
+        let hdr = app.switches["HDR 多曝光融合"]
+        XCTAssertTrue(hdr.exists)
+        hdr.tap()
+        app.buttons["start-stack"].tap()
+        let success = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "合成完成")).firstMatch
+        XCTAssertTrue(success.waitForExistence(timeout: 35), app.debugDescription)
+        app.buttons["editor-dock-page"].tap()
+        app.buttons["editor-tool-astro"].tap()
+        XCTAssertTrue(app.switches["auto-stf-toggle"].exists)
+        XCTAssertTrue(app.staticTexts["Arcsinh 拉伸"].exists)
+        app.switches["auto-stf-toggle"].tap()
+        XCTAssertTrue(app.buttons["导出照片"].isEnabled)
+    }
+
+    @MainActor
     func testEditorDockAndPrecisionControls() {
         let app = launch(with: "good")
         let stack = app.buttons["editor-tool-stack"]

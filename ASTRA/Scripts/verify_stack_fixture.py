@@ -8,7 +8,7 @@ import sys
 root = Path(sys.argv[1])
 projects = [(p.parent, json.loads(p.read_text())) for p in root.glob('*/project.json')]
 results = [(folder, p) for folder, p in projects if p.get('result')]
-assert len(results) == 3, f'Expected full, cropped and mixed-exposure sets to stack, got {len(results)}'
+assert len(results) == 4, f'Expected full, cropped, exposure and HDR sets to stack, got {len(results)}'
 for folder, item in results:
     print('fixture', folder.name, 'accepted', item['result']['acceptedFrames'],
           'frames', [(frame['height'], frame.get('starCount'), frame.get('registrationRMS'), frame.get('rejection'))

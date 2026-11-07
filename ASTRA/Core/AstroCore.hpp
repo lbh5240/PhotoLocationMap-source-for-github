@@ -25,6 +25,7 @@ enum class Mode { sky=0, landscape=1, trails=2 };
 struct Settings {
     Mode mode=Mode::sky;
     double sigma=3;
+    bool hdrFusion=false;
     // Fraction of image height from TOP, sky ends at this horizontal boundary.
     double skyFraction=0.65, feather=0.03;
     double minimumCoverage=0.8;

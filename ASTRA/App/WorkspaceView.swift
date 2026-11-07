@@ -3,8 +3,8 @@ import PhotosUI
 import UniformTypeIdentifiers
 
 private enum ToolPanel: String, CaseIterable {
-    case stack = "堆栈", light = "光影", color = "色彩", wheels = "色轮", curves = "曲线", hsl = "HSL", detail = "细节"
-    var symbol: String { switch self { case .stack: "square.3.layers.3d"; case .light: "sun.max"; case .color: "circle.lefthalf.filled"; case .wheels: "circle.hexagongrid.fill"; case .curves: "point.topleft.down.to.point.bottomright.curvepath"; case .hsl: "slider.horizontal.3"; case .detail: "circle.dotted" } }
+    case stack = "堆栈", light = "光影", color = "色彩", wheels = "色轮", curves = "曲线", hsl = "HSL", detail = "细节", astro = "星云"
+    var symbol: String { switch self { case .stack: "square.3.layers.3d"; case .light: "sun.max"; case .color: "circle.lefthalf.filled"; case .wheels: "circle.hexagongrid.fill"; case .curves: "point.topleft.down.to.point.bottomright.curvepath"; case .hsl: "slider.horizontal.3"; case .detail: "circle.dotted"; case .astro: "sparkles.rectangle.stack" } }
 }
 struct WorkspaceView: View {
     @EnvironmentObject private var store: AppStore
@@ -71,7 +71,8 @@ struct WorkspaceView: View {
             switch result { case .success(let urls): store.importFiles(urls); case .failure(let error): store.message = error.localizedDescription }
         }
         .photosPicker(isPresented: $pickingPhotos, selection: $selectedPhotos, maxSelectionCount: 512,
-                      selectionBehavior: .ordered, matching: .images, preferredItemEncoding: .current)
+                      selectionBehavior: .ordered, matching: .images, preferredItemEncoding: .current,
+                      photoLibrary: .shared())
         .onChange(of: selectedPhotos) { _, items in
             guard !items.isEmpty else { return }
             selectedPhotos = []
@@ -177,7 +178,7 @@ struct WorkspaceView: View {
     }
 
     private var toolBar: some View {
-        let items: [ToolPanel] = dockPage == 0 ? [.stack, .light, .color, .wheels] : [.curves, .hsl, .detail]
+        let items: [ToolPanel] = dockPage == 0 ? [.stack, .light, .color, .wheels] : [.curves, .hsl, .detail, .astro]
         return VStack(spacing: 0) {
             HStack(spacing: 4) {
                 ForEach(items, id: \.self) { item in
@@ -256,7 +257,32 @@ struct WorkspaceView: View {
                 ], checkpoint: store.checkpoint).id(ToolPanel.detail)
                 Text("加强降噪可能损失暗星。用对比按钮检查调整前后。").font(.caption2).foregroundStyle(.secondary)
             }
+        case .astro:
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle("自动 STF 屏幕预览", isOn: Binding(get: { p.adjustments.autoSTF ?? true }, set: { value in
+                    store.update({ $0.adjustments.autoSTF = value }, render: true)
+                })).font(.caption.weight(.semibold)).tint(EditorStyle.accent)
+                    .accessibilityIdentifier("auto-stf-toggle")
+                Text("STF 只改变屏幕显示，不写入线性合成文件，也不应用到导出。")
+                    .font(.caption2).foregroundStyle(.secondary)
+                ParameterInspector(parameters: [
+                    astroParameter("Arcsinh 拉伸", "sparkles", \.arcsinh, 0...60),
+                    astroParameter("核心保护", "circle.dotted.circle", \.maskedStretch, 0...1),
+                    astroParameter("背景梯度消除", "moon.stars", \.gradientRemoval, 0...1),
+                    astroParameter("星云对比", "cloud", \.nebulaContrast, 0...1),
+                    astroParameter("星点保护", "sparkle", \.starProtection, 0...1, neutral: 1)
+                ], checkpoint: store.checkpoint).id(ToolPanel.astro)
+            }
         }
+    }
+
+    private func astroParameter(_ title: String, _ symbol: String, _ key: WritableKeyPath<Adjustments, Double?>,
+                                _ range: ClosedRange<Double>, neutral: Double = 0) -> EditorParameter {
+        let binding = Binding(get: { store.project?.adjustments[keyPath: key] ?? neutral }, set: { value in
+            store.update({ $0.adjustments[keyPath: key] = value }, render: true)
+        })
+        return EditorParameter(title: title, symbol: symbol, value: binding, range: range, neutral: neutral,
+                               step: 0.01, precision: 2, unit: "")
     }
 
     private func parameter(_ title: String, _ symbol: String, _ key: WritableKeyPath<Adjustments, Double>,
@@ -291,6 +317,13 @@ struct WorkspaceView: View {
                     Label(project.configuration.region == nil ? "选择主图 · 框选主体" : "修改主图和主体框",
                           systemImage: "viewfinder").frame(maxWidth: .infinity, alignment: .leading)
                 }.buttonStyle(.bordered).accessibilityIdentifier("select-reference-region")
+            }
+            if project.configuration.mode == .sky {
+                Toggle("HDR 多曝光融合", isOn: Binding(get: { project.configuration.hdrFusion == true }, set: { value in
+                    store.update { $0.configuration.hdrFusion = value }
+                })).font(.caption.weight(.semibold)).tint(EditorStyle.accent)
+                Text("对齐后用短曝光恢复饱和核心，用长曝光保留暗部信号；需要同一目标的不同曝光。")
+                    .font(.caption2).foregroundStyle(.secondary)
             }
             Menu {
                 Button { store.update { $0.configuration.halfResolution = false } } label: {
@@ -518,7 +551,7 @@ struct ExportView: View {
                 Section("格式") { Picker("文件格式", selection: $kind) { ForEach(ExportKind.allCases) { Text($0.rawValue).tag($0) } }.pickerStyle(.inline) }
                 Section("全分辨率 · sRGB") {
                     if let p = store.project { Text(p.result.map { "\($0.width) × \($0.height)" } ?? p.frames.first.map { "\($0.width) × \($0.height)" } ?? "") }
-                    Text("导出会读取完整尺寸数据并应用当前全部调整。16 位 TIFF 适合继续后期，JPEG 适合分享。").font(.caption).foregroundStyle(.secondary)
+                    Text("导出会读取完整尺寸数据并应用星云工具和其它调整。自动 STF 仅用于屏幕预览；要导出明亮的星云，请调节 Arcsinh 拉伸。16 位 TIFF 适合继续后期。").font(.caption).foregroundStyle(.secondary)
                     if store.project?.result == nil { Text("当前尚未堆栈，将导出第一张原片的编辑结果。").font(.caption).foregroundStyle(.orange) }
                     Text("合成边缘覆盖不足时保留透明；JPEG 边缘为黑色。建议导出后裁切。").font(.caption).foregroundStyle(.secondary)
                 }

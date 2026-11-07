@@ -153,9 +153,15 @@ final class ImagePipeline {
         let image = CIImage(bitmapData: data, bytesPerRow: result.width * 16, size: CGSize(width: result.width, height: result.height), format: .RGBAf, colorSpace: linear)
         return result.bottomFirst == true && bitmapRowsTopFirst ? image.oriented(.downMirrored) : image
     }
-    func edit(_ source: CIImage, _ a: Adjustments) -> CIImage {
+    func astroProfile(_ image: CIImage) -> AstroProfile {
+        let sample = proxy(image, maxSide: 256)
+        return AstroProcessing.profile(sample.data, width: sample.width, height: sample.height,
+                                       linear: linear, bitmapRowsTopFirst: bitmapRowsTopFirst)
+    }
+    func edit(_ source: CIImage, _ a: Adjustments, profile: AstroProfile? = nil) -> CIImage {
         let extent = source.extent
-        var im = source
+        let needsAstro = (a.arcsinh ?? 0) > 0 || (a.gradientRemoval ?? 0) > 0 || (a.nebulaContrast ?? 0) > 0
+        var im = needsAstro ? AstroProcessing.process(source, adjustments: a, profile: profile ?? astroProfile(source)) : source
         if a.exposure != 0 { im = im.applyingFilter("CIExposureAdjust", parameters: [kCIInputEVKey: a.exposure]) }
         if a.warmth != 0 || a.tint != 0 { im = im.applyingFilter("CITemperatureAndTint", parameters: ["inputNeutral": CIVector(x: 6500 + a.warmth * 25, y: a.tint), "inputTargetNeutral": CIVector(x: 6500, y: 0)]) }
         if a.noise > 0 { im = im.clampedToExtent().applyingFilter("CINoiseReduction", parameters: ["inputNoiseLevel": a.noise * 0.08, "inputSharpness": 0]).cropped(to: extent) }
@@ -170,11 +176,13 @@ final class ImagePipeline {
         if a.sharpness > 0 { im = im.clampedToExtent().applyingFilter("CISharpenLuminance", parameters: [kCIInputSharpnessKey: a.sharpness]).cropped(to: extent) }
         return im.cropped(to: extent)
     }
-    func preview(image: CIImage, adjustments: Adjustments, maxSide: Int = 1600) throws -> CGImage {
+    func preview(image: CIImage, adjustments: Adjustments, maxSide: Int = 1600,
+                 profile: AstroProfile? = nil, autoSTF: Bool = false) throws -> CGImage {
         let s = min(1, Double(maxSide) / max(image.extent.width, image.extent.height))
         let resized = image.transformed(by: CGAffineTransform(scaleX: s, y: s))
-        let edited = edit(resized, adjustments)
-        guard let cg = context.createCGImage(edited, from: edited.extent, format: .RGBA8, colorSpace: display) else { throw AstroError.message("预览渲染失败") }
+        let edited = edit(resized, adjustments, profile: profile)
+        let shown = autoSTF ? AstroProcessing.screenStretch(edited, profile: profile ?? astroProfile(resized)) : edited
+        guard let cg = context.createCGImage(shown, from: shown.extent, format: .RGBA8, colorSpace: display) else { throw AstroError.message("预览渲染失败") }
         return cg
     }
     func export(image: CIImage, adjustments: Adjustments, kind: ExportKind, url: URL) throws {

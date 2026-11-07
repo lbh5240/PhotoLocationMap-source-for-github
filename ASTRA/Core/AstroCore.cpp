@@ -311,6 +311,7 @@ void stack(const std::vector<Input>& inputs,int w,int h,const Settings& cfg,cons
         std::vector<float> rows(size_t(w)*th*4),values(n*tw*th*3),ground(landscape?values.size():0);
         std::vector<unsigned char> valid(n*tw*th),groundValid(landscape?valid.size():0);
         std::vector<double> v(n),wt(n),sorted(n),deviation(n);
+        std::vector<bool> clipped(n);
         for(int y0=0;y0<h;y0+=th) {
             int hh=std::min(th,h-y0);std::fill(rows.begin(),rows.end(),0);
             for(int x0=0;x0<w;x0+=tw) {
@@ -330,9 +331,21 @@ void stack(const std::vector<Input>& inputs,int w,int h,const Settings& cfg,cons
                     }
                 }
                 auto combine=[&](size_t p,int c,const std::vector<float>& vals,const std::vector<unsigned char>& mask,bool trails)->std::pair<float,bool> {
-                    size_t count=0;for(size_t f=0;f<n;f++)if(mask[f*pixels+p]){v[count]=vals[(f*pixels+p)*3+c]*inputs[f].gain+inputs[f].offset;wt[count]=inputs[f].weight;count++;}
+                    size_t count=0,unclipped=0;
+                    for(size_t f=0;f<n;f++)if(mask[f*pixels+p]){
+                        const size_t base=(f*pixels+p)*3;
+                        v[count]=vals[base+c]*inputs[f].gain+inputs[f].offset;
+                        const bool saturated=cfg.hdrFusion && !trails &&
+                            std::max({vals[base],vals[base+1],vals[base+2]})>=.98f;
+                        clipped[count]=saturated;
+                        if(!saturated)unclipped++;
+                        wt[count]=inputs[f].weight*(cfg.hdrFusion && !trails ?
+                            std::clamp(1.0/(inputs[f].gain*inputs[f].gain),.1,16.0):1.0);
+                        count++;
+                    }
                     if(count<size_t(std::max(2,int(std::ceil(n*cfg.minimumCoverage)))))return {0,false};
                     if(trails)return {float(*std::max_element(v.begin(),v.begin()+count)),true};
+                    if(unclipped>0)for(size_t j=0;j<count;j++)if(clipped[j])wt[j]=0;
                     double center=0,limit=std::numeric_limits<double>::infinity();
                     if(count>=5) {
                         std::copy(v.begin(),v.begin()+count,sorted.begin());auto m=sorted.begin()+count/2;std::nth_element(sorted.begin(),m,sorted.begin()+count);center=*m;
@@ -340,7 +353,7 @@ void stack(const std::vector<Input>& inputs,int w,int h,const Settings& cfg,cons
                         auto dm=deviation.begin()+count/2;std::nth_element(deviation.begin(),dm,deviation.begin()+count);
                         limit=cfg.sigma*std::max(1e-6,1.4826*(*dm));
                     }
-                    double sum=0,weights=0;for(size_t j=0;j<count;j++)if(std::abs(v[j]-center)<=limit){sum+=v[j]*wt[j];weights+=wt[j];}
+                    double sum=0,weights=0;for(size_t j=0;j<count;j++)if(wt[j]>0&&std::abs(v[j]-center)<=limit){sum+=v[j]*wt[j];weights+=wt[j];}
                     if(weights==0)return {float(center),true};
                     return {float(sum/weights),true};
                 };

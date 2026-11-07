@@ -132,6 +132,24 @@ int main(int argc,char** argv) {
         }
         check(refinedError<coarseError*.20,"full-resolution registration preserves the nebula filament");
         std::cout<<"PASS mixed exposures retain nebula detail after rotation and drift, refined/coarse MSE="<<refinedError/coarseError<<"\n";
+        // Short frames must replace clipped long-exposure pixels while long
+        // frames continue to contribute low-noise signal in faint regions.
+        std::vector<Input> hdrInputs;
+        for(int f=0;f<3;f++){
+            const double exposure=f==2?.5:2.5;
+            std::vector<float> raster(size_t(32)*32*4,1);
+            for(int y=0;y<32;y++)for(int x=0;x<32;x++){
+                const float detail=(x>=12&&x<20&&y>=12&&y<20)?float(.72+.012*(x-12)):.06f;
+                for(int c=0;c<3;c++)raster[(y*32+x)*4+c]=std::min(1.f,float(detail*exposure));
+            }
+            Input in{dir+"/hdr"+std::to_string(f),{},1};in.gain=1/exposure;save(in.path,raster);hdrInputs.push_back(in);
+        }
+        Settings hdrConfig;hdrConfig.hdrFusion=true;
+        stack(hdrInputs,32,32,hdrConfig,dir+"/hdr-result",integratedCancel,[](double){});
+        const auto hdr=load(dir+"/hdr-result",32,32);
+        check(std::abs(hdr[(15*32+15)*4]-.756)<.015 && std::abs(hdr[(3*32+3)*4]-.06)<.01,
+              "HDR retains short-exposure core and long-exposure faint signal");
+        std::cout<<"PASS HDR clipped-core fusion\n";
         int w=96,h=80;std::vector<Input> ins;std::normal_distribution<float> n(0,.02);double inputVar=0;
         for(int f=0;f<15;f++){std::vector<float> v(size_t(w)*h*4);for(int p=0;p<w*h;p++){float delta=n(gen);inputVar+=delta*delta;for(int c=0;c<3;c++)v[p*4+c]=.25f+delta;v[p*4+3]=1;}if(f==3)for(int c=0;c<3;c++)v[(30*w+40)*4+c]=8;std::string p=dir+"/f"+std::to_string(f);save(p,v);ins.push_back({p,{},1});}
         Settings cfg;std::atomic<bool> cancel(false);double progress=0;std::string output=dir+"/result";
