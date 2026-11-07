@@ -32,8 +32,14 @@ int main(int argc,char** argv) {
         for(int i=0;i<45;i++){double sx=xy(gen),sy=xy(gen);for(int y=int(sy)-5;y<=int(sy)+5;y++)for(int x=int(sx)-5;x<=int(sx)+5;x++)for(int c=0;c<3;c++)image[(size_t(y)*aw+x)*4+c]+=.2f*std::exp(-((x-sx)*(x-sx)+(y-sy)*(y-sy))/2.0);}
         image[(200*aw+250)*4]=50;image[(200*aw+250)*4+1]=50;image[(200*aw+250)*4+2]=50;
         auto detected=analyze(image.data(),aw,ah);check(detected.stars.size()>=30&&detected.stars.size()<60,"Gaussian star detection/hot pixel rejection");
+        auto saturated=image;
+        for(size_t i=0;i<saturated.size();i+=4)for(int c=0;c<3;c++)
+            saturated[i+c]=std::min(.35f,saturated[i+c]*4);
+        const auto clipped=analyze(saturated.data(),aw,ah);
+        check(clipped.stars.size()>=25 && align(detected,clipped).matches>=20,
+              "saturated plateau stars remain detectable and align to a different exposure");
         auto sky=analyze(image.data(),aw,ah,.4);for(auto s:sky.stars)check(s.y>ah*.6,"sky region restricts detection");
-        std::cout<<"PASS detector: "<<detected.stars.size()<<" stars and manual sky region\n";
+        std::cout<<"PASS detector: "<<detected.stars.size()<<" stars, clipped exposure and manual sky region\n";
         // Integrated regression: detect stars in real float rasters, register,
         // bilinearly resample, stack, then measure recovered star positions.
         std::vector<Star> field;for(int i=0;i<35;i++)field.push_back({xy(gen),xy(gen),.5-double(i)*.006,1.3});

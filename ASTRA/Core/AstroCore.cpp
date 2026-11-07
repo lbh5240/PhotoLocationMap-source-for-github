@@ -185,7 +185,13 @@ Analysis analyze(const float* rgba,int w,int h,double skyFraction) {
     for(int y=std::max(minY+5,5);y<h-5;y++)for(int x=5;x<w-5;x++) {
         double peak=lum[size_t(y)*w+x];if(peak<a.background+4.5*a.noise)continue;
         bool maximum=true;
-        for(int dy=-2;dy<=2&&maximum;dy++)for(int dx=-2;dx<=2;dx++) if((dx||dy)&&lum[size_t(y+dy)*w+x+dx]>=peak){maximum=false;break;}
+        // A clipped exposure can give a star several equally bright peak pixels.
+        // Pick one representative of that plateau, then use the surrounding
+        // signal for the centroid instead of discarding every peak pixel.
+        for(int dy=-2;dy<=2&&maximum;dy++)for(int dx=-2;dx<=2;dx++) if(dx||dy) {
+            const double neighbor=lum[size_t(y+dy)*w+x+dx];
+            if(neighbor>peak || (neighbor==peak && (dy<0 || (dy==0 && dx<0)))) {maximum=false;break;}
+        }
         if(!maximum)continue;
         std::vector<double> ring;for(int dy=-5;dy<=5;dy++)for(int dx=-5;dx<=5;dx++)if(std::abs(dx)>=4||std::abs(dy)>=4)ring.push_back(lum[size_t(y+dy)*w+x+dx]);
         double bg=median(ring),mass=0,cx=0,cy=0;
