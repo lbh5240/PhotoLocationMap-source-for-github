@@ -76,11 +76,14 @@ enum StackWorker {
             let y0 = offsetY + region.y * Double(ref.height) / Double(divisor) * proxyScales[reference]!
             let x1 = x0 + region.width * Double(ref.width) / Double(divisor) * proxyScales[reference]!
             let y1 = y0 + region.height * Double(ref.height) / Double(divisor) * proxyScales[reference]!
-            analyses[reference]?["stars"] = (analyses[reference]?["stars"] as? [[NSNumber]] ?? []).filter { star in
+            var referenceAnalysis = analyses[reference]!
+            let stars = (referenceAnalysis["stars"] as? [[NSNumber]] ?? []).filter { star in
                 star.count >= 2 && star[0].doubleValue >= x0 && star[0].doubleValue <= x1 &&
                 star[1].doubleValue >= y0 && star[1].doubleValue <= y1
             }
-            let count = (analyses[reference]?["stars"] as? [Any])?.count ?? 0
+            referenceAnalysis["stars"] = stars
+            analyses[reference] = referenceAnalysis
+            let count = stars.count
             guard count >= 8 else {
                 throw AstroError.message("主体框内只有 \(count) 个可识别星点，请把框扩大到至少包含 8 颗清晰星星。")
             }
