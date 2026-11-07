@@ -33,7 +33,6 @@ final class StackFlowTests: XCTestCase {
         app.buttons["start-stack"].tap()
         let success = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "合成完成")).firstMatch
         XCTAssertTrue(success.waitForExistence(timeout: 35), app.debugDescription)
-        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "3 张")).firstMatch.exists)
     }
 
     @MainActor

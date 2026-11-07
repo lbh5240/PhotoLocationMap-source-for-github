@@ -9,6 +9,8 @@ root = Path(sys.argv[1])
 projects = [(p.parent, json.loads(p.read_text())) for p in root.glob('*/project.json')]
 results = [(folder, p) for folder, p in projects if p.get('result')]
 assert len(results) == 3, f'Expected full, cropped and mixed-exposure sets to stack, got {len(results)}'
+assert all(len(project['frames']) == 3 and project['result']['acceptedFrames'] == 3 for _, project in results), \
+    'Every exposure and crop fixture must accept all three frames'
 folder, project = next((folder, project) for folder, project in results if all(frame["height"] == 256 for frame in project["frames"]))
 assert any(any(frame["height"] == 240 for frame in project["frames"]) for _, project in results)
 result = project['result']
