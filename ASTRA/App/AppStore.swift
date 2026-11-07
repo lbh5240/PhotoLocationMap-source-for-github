@@ -31,7 +31,7 @@ private actor PreviewWorker {
     func render(project: AstroProject, repository: ProjectRepository) throws -> (CGImage, CGImage) {
         try Task.checkCancellation()
         return try autoreleasepool {
-            let url = repository.url(project, project.result?.fileName ?? project.frames[0].fileName)
+            let url = repository.url(project, project.result?.fileName ?? project.frames.first(where: { $0.id == project.configuration.referenceFrameID })?.fileName ?? project.frames[0].fileName)
             let pipeline = self.pipeline ?? ImagePipeline()
             self.pipeline = pipeline
             if key != url || proxy == nil || before == nil {
@@ -335,7 +335,7 @@ final class AppStore: ObservableObject {
                 let url = try await Task.detached(priority: .userInitiated) {
                     let pipeline = ImagePipeline(), source: CIImage
                     if let result = p.result { source = try pipeline.master(result, repository: repo, project: p) }
-                    else { source = try pipeline.decode(repo.url(p, p.frames[0].fileName)) }
+                    else { source = try pipeline.decode(repo.url(p, (p.frames.first(where: { $0.id == p.configuration.referenceFrameID }) ?? p.frames[0]).fileName)) }
                     let output = repo.url(p, "Exports/ASTRA-\(UUID().uuidString.prefix(8)).\(kind.ext)")
                     try FileManager.default.createDirectory(at: output.deletingLastPathComponent(), withIntermediateDirectories: true)
                     try pipeline.export(image: source, adjustments: p.adjustments, kind: kind, url: output)

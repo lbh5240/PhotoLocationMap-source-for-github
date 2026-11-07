@@ -12,12 +12,19 @@ final class StackFlowTests: XCTestCase {
     }
 
     @MainActor
-    func testMixedDimensionsShowPersistentReason() {
+    func testMixedDimensionsCanRegisterWithSelectedSubject() {
         let app = launch(with: "mixed")
+        app.buttons["select-reference-region"].tap()
+        let canvas = app.descendants(matching: .any)["reference-selector-canvas"].firstMatch
+        XCTAssertTrue(canvas.waitForExistence(timeout: 10), app.debugDescription)
+        canvas.coordinate(withNormalizedOffset: CGVector(dx: 0.08, dy: 0.08))
+            .press(forDuration: 0.08, thenDragTo: canvas.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.93)))
+        XCTAssertTrue(app.descendants(matching: .any)["reference-region"].firstMatch.waitForExistence(timeout: 4))
+        app.buttons["完成"].tap()
         app.buttons["start-stack"].tap()
-        let error = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "尺寸不同")).firstMatch
-        XCTAssertTrue(error.waitForExistence(timeout: 8), app.debugDescription)
-        XCTAssertTrue(app.buttons["start-stack"].isEnabled)
+        let success = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "合成完成")).firstMatch
+        XCTAssertTrue(success.waitForExistence(timeout: 35), app.debugDescription)
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "384 × 256 像素")).firstMatch.exists)
     }
 
     @MainActor

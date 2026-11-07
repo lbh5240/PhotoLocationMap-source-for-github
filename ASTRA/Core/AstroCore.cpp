@@ -45,7 +45,7 @@ Transform fit(const std::vector<Star>& r,const std::vector<Star>& s,const std::v
     double den=0,real=0,imag=0;
     for(auto m:pairs) {double x=r[m.r].x-rx,y=r[m.r].y-ry,u=s[m.s].x-sx,v=s[m.s].y-sy;
         den+=x*x+y*y;real+=x*u+y*v;imag+=x*v-y*u;}
-    if(den<1e-9) throw std::runtime_error("Degenerate star geometry");
+    if(den<1e-9) throw std::runtime_error("星点分布不足以确定旋转和位移");
     Transform t; t.a=real/den;t.b=imag/den;t.tx=sx-t.a*rx+t.b*ry;t.ty=sy-t.b*rx-t.a*ry;
     t.matches=int(pairs.size());double sq=0;
     for(auto m:pairs) {auto p=map(t,r[m.r].x,r[m.r].y);sq+=std::pow(p.first-s[m.s].x,2)+std::pow(p.second-s[m.s].y,2);}
@@ -53,7 +53,7 @@ Transform fit(const std::vector<Star>& r,const std::vector<Star>& s,const std::v
 }
 struct Triangle {double x,y;std::array<int,3> ids;};
 std::vector<Triangle> triangles(const std::vector<Star>& s) {
-    std::vector<Triangle> out; int count=std::min(28,int(s.size()));
+    std::vector<Triangle> out; int count=std::min(40,int(s.size()));
     for(int i=0;i<count;i++) for(int j=i+1;j<count;j++) for(int k=j+1;k<count;k++) {
         std::array<std::pair<double,int>,3> edges={{{dist(s[j],s[k]),i},{dist(s[i],s[k]),j},{dist(s[i],s[j]),k}}};
         std::sort(edges.begin(),edges.end());
@@ -71,7 +71,7 @@ struct File {
         struct stat st{};
         if(fd<0||fstat(fd,&st)||uint64_t(st.st_size)!=uint64_t(n)) {
             if(fd>=0)close(fd);
-            fd=-1;throw std::runtime_error("Invalid or missing float cache: "+p);
+            fd=-1;throw std::runtime_error("解码缓存不完整："+p);
         }
     }
     ~File(){if(fd>=0)close(fd);}
@@ -101,7 +101,7 @@ struct Window {
         size_t start=size_t(first)*w*pixelBytes, end=size_t(last+1)*w*pixelBytes;
         size_t page=size_t(sysconf(_SC_PAGESIZE)),base=(start/page)*page;
         len=end-base;ptr=mmap(nullptr,len,PROT_READ,MAP_PRIVATE,fd,off_t(base));
-        if(ptr==MAP_FAILED)throw std::runtime_error("Cannot map cache window");
+        if(ptr==MAP_FAILED)throw std::runtime_error("读取照片缓存失败，请检查可用内存");
         data=static_cast<const char*>(ptr)+(start-base);
     }
     ~Window(){if(ptr!=MAP_FAILED)munmap(ptr,len);}
@@ -114,6 +114,8 @@ struct Window {
         int x0=int(x),y0=int(y),x1=std::min(x0+1,width-1),y1=std::min(y0+1,h-1);
         if(y0<first||y1>last)return false;
         double fx=x-x0,fy=y-y0;
+        if(channel(x0,y0,3)<.99f||channel(x1,y0,3)<.99f||
+           channel(x0,y1,3)<.99f||channel(x1,y1,3)<.99f)return false;
         for(int c=0;c<3;c++) {
             auto at=[&](int px,int py){return channel(px,py,c);};
             out[c]=float((1-fy)*((1-fx)*at(x0,y0)+fx*at(x1,y0))+fy*((1-fx)*at(x0,y1)+fx*at(x1,y1)));
@@ -165,12 +167,12 @@ std::optional<Star> refineStar(int fd,bool half,int w,int h,double x,double y,in
 
 void writeAll(int fd,const void* data,size_t n) {
     const char* p=static_cast<const char*>(data);
-    while(n) {ssize_t r=write(fd,p,n);if(r<0&&errno==EINTR)continue;if(r<=0)throw std::runtime_error("Cannot write result (storage full?)");p+=r;n-=size_t(r);}
+    while(n) {ssize_t r=write(fd,p,n);if(r<0&&errno==EINTR)continue;if(r<=0)throw std::runtime_error("写入合成照片失败，请检查存储空间");p+=r;n-=size_t(r);}
 }
 }
 
 Analysis analyze(const float* rgba,int w,int h,double skyFraction) {
-    if(!rgba||w<16||h<16||!std::isfinite(skyFraction)||skyFraction<=0||skyFraction>1)throw std::runtime_error("Invalid analysis input");
+    if(!rgba||w<16||h<16||!std::isfinite(skyFraction)||skyFraction<=0||skyFraction>1)throw std::runtime_error("星点分析参数无效");
     std::vector<double> lum(size_t(w)*h),samples;
     int minY=std::clamp(int(h*(1-skyFraction)),0,h-1);
     for(int y=0;y<h;y++)for(int x=0;x<w;x++) {
@@ -204,7 +206,7 @@ Analysis analyze(const float* rgba,int w,int h,double skyFraction) {
 }
 
 Transform align(const Analysis& ref,const Analysis& src) {
-    if(ref.stars.size()<8||src.stars.size()<8)throw std::runtime_error("Fewer than 8 usable stars; adjust sky region or exclude frame");
+    if(ref.stars.size()<8||src.stars.size()<8)throw std::runtime_error("可用星点不足 8 个，请扩大主体框选范围或排除该照片");
     auto rt=triangles(ref.stars),st=triangles(src.stars);Transform best;int bestCount=0;double bestRMS=1e9;
     for(auto& r:rt) {
         auto begin=std::lower_bound(st.begin(),st.end(),r.x-0.004,[](auto& t,double x){return t.x<x;});
@@ -222,12 +224,12 @@ Transform align(const Analysis& ref,const Analysis& src) {
             if(bestCount>=int(std::min(ref.stars.size(),src.stars.size())*0.85))return best;
         }
     }
-    if(bestCount<std::max(8,int(std::min(ref.stars.size(),src.stars.size())*0.15))||bestRMS>1.6)throw std::runtime_error("Star registration failed: insufficient consistent matches");
+    if(bestCount<std::max(8,int(std::min(ref.stars.size(),src.stars.size())*0.15))||bestRMS>1.6)throw std::runtime_error("照片与主图未找到足够相同星点，请扩大主体框选范围或排除该照片");
     return best;
 }
 
 Transform liftToFullResolution(Transform t,double scale) {
-    if(!(scale>0&&scale<=1))throw std::runtime_error("Invalid proxy scale");
+    if(!(scale>0&&scale<=1))throw std::runtime_error("预览图比例无效");
     t.tx=t.tx/scale+(t.a-t.b-1)*(scale-1)/(2*scale);
     t.ty=t.ty/scale+(t.a+t.b-1)*(scale-1)/(2*scale);
     t.rms/=scale;return t;
@@ -256,7 +258,7 @@ Transform registerFrame(const Analysis& ref,const Analysis& src,double scale,
         r.push_back(*a);s.push_back(*b);inliers.push_back({index,index});
     }
     const size_t required=std::max<size_t>(8,(pairs.size()+2)/3);
-    const auto fail=[] {throw std::runtime_error("全分辨率星点校验未通过，已排除此帧以避免拖糊结果");};
+    const auto fail=[] {throw std::runtime_error("主图与此照片的细节校验误差较大，已排除此帧；可扩大主体框或调整选片");};
     for(int iteration=0;iteration<4;iteration++) {
         if(inliers.size()<required)fail();
         const Transform refined=fit(r,s,inliers);
@@ -281,11 +283,11 @@ Transform registerFrame(const Analysis& ref,const Analysis& src,double scale,
 }
 
 void stack(const std::vector<Input>& inputs,int w,int h,const Settings& cfg,const std::string& output,std::atomic<bool>& cancel,const std::function<void(double)>& progress) {
-    if(inputs.size()<2||inputs.size()>512||w<2||h<2||w>30000||h>30000||!(cfg.sigma>=1&&cfg.sigma<=8)||!(cfg.minimumCoverage>0&&cfg.minimumCoverage<=1))throw std::runtime_error("Invalid stack configuration");
+    if(inputs.size()<2||inputs.size()>512||w<2||h<2||w>30000||h>30000||!(cfg.sigma>=1&&cfg.sigma<=8)||!(cfg.minimumCoverage>0&&cfg.minimumCoverage<=1))throw std::runtime_error("堆栈设置无效");
     std::vector<File> files;files.reserve(inputs.size());
     for(auto& in:inputs){if(!(in.weight>0&&std::isfinite(in.weight)))throw std::runtime_error("Invalid frame weight");files.emplace_back(in.path,size_t(w)*h*(in.half?8:16));}
     std::string temp=output+".partial";int out=open(temp.c_str(),O_CREAT|O_TRUNC|O_WRONLY,0600);
-    if(out<0)throw std::runtime_error("Cannot create stack output");
+    if(out<0)throw std::runtime_error("无法创建合成文件，请检查存储空间");
     try {
         const bool landscape=cfg.mode==Mode::landscape;
         const size_t n=inputs.size();
@@ -296,11 +298,11 @@ void stack(const std::vector<Input>& inputs,int w,int h,const Settings& cfg,cons
         for(int y0=0;y0<h;y0+=th) {
             int hh=std::min(th,h-y0);std::fill(rows.begin(),rows.end(),0);
             for(int x0=0;x0<w;x0+=tw) {
-                if(cancel.load())throw std::runtime_error("Cancelled");
+                if(cancel.load())throw std::runtime_error("已取消");
                 int ww=std::min(tw,w-x0);size_t pixels=size_t(ww)*hh;
                 std::fill(valid.begin(),valid.end(),0);std::fill(groundValid.begin(),groundValid.end(),0);
                 for(size_t f=0;f<n;f++) {
-                    if(cancel.load())throw std::runtime_error("Cancelled");
+                    if(cancel.load())throw std::runtime_error("已取消");
                     Transform t=cfg.mode==Mode::trails?Transform{}:inputs[f].transform;
                     std::array<std::pair<double,double>,4> corners={map(t,x0,y0),map(t,x0+ww-1,y0),map(t,x0,y0+hh-1),map(t,x0+ww-1,y0+hh-1)};
                     double lo=h,hi=0;for(auto p:corners){lo=std::min(lo,p.second);hi=std::max(hi,p.second);}
@@ -340,10 +342,10 @@ void stack(const std::vector<Input>& inputs,int w,int h,const Settings& cfg,cons
             }
             writeAll(out,rows.data(),size_t(w)*hh*16);progress(double(y0+hh)/h);
         }
-        if(cancel.load())throw std::runtime_error("Cancelled");
-        if(fsync(out))throw std::runtime_error("Cannot flush stack output");
+        if(cancel.load())throw std::runtime_error("已取消");
+        if(fsync(out))throw std::runtime_error("无法保存合成结果，请检查存储空间");
         close(out);out=-1;
-        if(rename(temp.c_str(),output.c_str()))throw std::runtime_error("Cannot commit stack output");
+        if(rename(temp.c_str(),output.c_str()))throw std::runtime_error("无法提交合成结果，请检查存储空间");
     }catch(...){if(out>=0)close(out);unlink(temp.c_str());throw;}
 }
 }

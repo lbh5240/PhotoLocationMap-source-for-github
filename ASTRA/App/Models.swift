@@ -7,7 +7,16 @@ enum StackMode: Int, Codable, CaseIterable, Identifiable, Sendable {
     var subtitle: String { ["跟踪拍摄 / 纯天空", "固定机位 · 手动水平分界", "固定机位 · 亮度最大值"][rawValue] }
     var symbol: String { ["sparkles", "mountain.2", "moon.stars"][rawValue] }
 }
+struct StackRegion: Codable, Equatable, Sendable {
+    var x: Double
+    var y: Double
+    var width: Double
+    var height: Double
+}
+
 struct StackConfiguration: Codable, Equatable, Sendable {
+    var referenceFrameID: UUID?
+    var region: StackRegion?
     var mode: StackMode = .sky
     var sigma: Double = 3
     var skyFraction: Double = 0.65

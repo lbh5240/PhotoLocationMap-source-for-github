@@ -8,8 +8,9 @@ import sys
 root = Path(sys.argv[1])
 projects = [(p.parent, json.loads(p.read_text())) for p in root.glob('*/project.json')]
 results = [(folder, p) for folder, p in projects if p.get('result')]
-assert len(results) == 1, f'Expected one successful project, got {len(results)}'
-folder, project = results[0]
+assert len(results) == 2, f'Expected both full and cropped sets to stack, got {len(results)}'
+folder, project = next((folder, project) for folder, project in results if all(frame["height"] == 256 for frame in project["frames"]))
+assert any(any(frame["height"] == 240 for frame in project["frames"]) for _, project in results)
 result = project['result']
 assert result["bottomFirst"] is True
 assert len(project['frames']) == 3 and result['acceptedFrames'] == 3

@@ -99,6 +99,15 @@ final class ImagePipeline {
         }
         return f
     }
+    func registrationCanvas(_ image: CIImage, width: Int, height: Int, divisor: Int) -> CIImage {
+        let scaled = image.transformed(by: CGAffineTransform(scaleX: 1 / CGFloat(divisor), y: 1 / CGFloat(divisor)))
+        let centered = scaled.transformed(by: CGAffineTransform(
+            translationX: (CGFloat(width) - scaled.extent.width) / 2,
+            y: (CGFloat(height) - scaled.extent.height) / 2))
+        let bounds = CGRect(x: 0, y: 0, width: width, height: height)
+        let empty = CIImage(color: .clear).cropped(to: bounds)
+        return centered.composited(over: empty).cropped(to: bounds)
+    }
     func proxy(_ image: CIImage, maxSide: Int = 1600) -> (data: Data, width: Int, height: Int, scale: Double) {
         let scale = min(1, Double(maxSide) / max(image.extent.width, image.extent.height))
         let w = max(1, Int(image.extent.width * scale)), h = max(1, Int(image.extent.height * scale))

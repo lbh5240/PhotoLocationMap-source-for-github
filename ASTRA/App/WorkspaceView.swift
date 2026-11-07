@@ -17,6 +17,7 @@ struct WorkspaceView: View {
     @State private var pickingPhotos = false
     @State private var selectedPhotos: [PhotosPickerItem] = []
     @State private var showFrames = false
+    @State private var showRegion = false
     @State private var showExport = false
     @State private var showHelp = false
     @State private var showRename = false
@@ -87,6 +88,7 @@ struct WorkspaceView: View {
             Text("仅使用所选格式。使用 JPEG 可节省空间，使用 RAW 可保留更多调色余量。")
         }
         .sheet(isPresented: $showFrames) { FramesView() }
+        .sheet(isPresented: $showRegion) { ReferenceRegionView() }
         .sheet(isPresented: $showExport) { ExportView() }
         .sheet(isPresented: $showHelp) { HelpView() }
         .sheet(isPresented: Binding(get: { store.sharedURL != nil }, set: { if !$0 { store.sharedURL = nil } })) { if let url = store.sharedURL { ShareSheet(url: url) } }
@@ -284,6 +286,12 @@ struct WorkspaceView: View {
                 }
             }
             Text(project.configuration.mode.subtitle).font(.caption2).foregroundStyle(.secondary)
+            if project.configuration.mode != .trails && !project.frames.isEmpty {
+                Button { showRegion = true } label: {
+                    Label(project.configuration.region == nil ? "选择主图 · 框选主体" : "修改主图和主体框",
+                          systemImage: "viewfinder").frame(maxWidth: .infinity, alignment: .leading)
+                }.buttonStyle(.bordered).accessibilityIdentifier("select-reference-region")
+            }
             Menu {
                 Button { store.update { $0.configuration.halfResolution = false } } label: {
                     Label("原尺寸", systemImage: project.configuration.halfResolution == true ? "photo" : "checkmark")
@@ -482,8 +490,16 @@ struct FramesView: View {
                             if let stars = f.starCount { Text("\(stars) 星点" + (f.registrationRMS.map { String(format: " · RMS %.2f px", $0) } ?? "")).font(.caption2.monospacedDigit()).foregroundStyle(.mint) }
                             if let rejection = f.rejection { Text(rejection).font(.caption2).foregroundStyle(.orange) }
                         }
+                        if f.id == store.project?.configuration.referenceFrameID {
+                            Text("主图").font(.caption2.weight(.semibold)).foregroundStyle(EditorStyle.accent)
+                        }
                         Toggle("参与合成", isOn: Binding(get: { store.project?.frames.first { $0.id == f.id }?.included ?? false }, set: { v in store.update { p in if let i = p.frames.firstIndex(where: { $0.id == f.id }) { p.frames[i].included = v } } })).labelsHidden().disabled(store.busy)
                     }.padding(.vertical, 4)
+                        .swipeActions(edge: .leading) {
+                            Button("设为主图") {
+                                store.update { $0.configuration.referenceFrameID = f.id; $0.configuration.region = nil }
+                            }.tint(.blue)
+                        }
                 }
             }.navigationTitle("合成照片").toolbar {
                 ToolbarItem(placement: .topBarLeading) { Menu("选择") { Button("全选") { store.update { p in for i in p.frames.indices { p.frames[i].included = true } } }; Button("排除配准失败帧") { store.update { p in for i in p.frames.indices where p.frames[i].rejection != nil { p.frames[i].included = false } } } }.disabled(store.busy) }
@@ -509,5 +525,146 @@ struct ExportView: View {
                 Section { Button("导出并分享") { dismiss(); Task { try? await Task.sleep(for: .milliseconds(400)); store.export(kind) } }.frame(maxWidth: .infinity).disabled(store.busy) }
             }.navigationTitle("导出成片").toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } } }
         }.presentationDetents([.large])
+    }
+}
+
+private struct ReferenceRegionView: View {
+    @EnvironmentObject private var store: AppStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var image: UIImage?
+    @State private var loading = false
+    @State private var dragStart: CGPoint?
+    @State private var dragEnd: CGPoint?
+
+    private var selected: FrameRecord? {
+        guard let project = store.project else { return nil }
+        return project.frames.first { $0.id == project.configuration.referenceFrameID && $0.included }
+            ?? project.frames.first(where: \.included)
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 16) {
+                if let project = store.project {
+                    Menu {
+                        ForEach(project.frames.filter(\.included)) { frame in
+                            Button(frame.name) {
+                                store.update {
+                                    $0.configuration.referenceFrameID = frame.id
+                                    $0.configuration.region = nil
+                                }
+                                image = nil
+                                load(frame)
+                            }
+                        }
+                    } label: {
+                        Label("主图 · \(selected?.name ?? "选择照片")", systemImage: "photo")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .buttonStyle(.bordered)
+                    .padding(.horizontal)
+                }
+                GeometryReader { geometry in
+                    ZStack {
+                        Color.black
+                        if let image {
+                            let ratio = min(geometry.size.width / image.size.width,
+                                            geometry.size.height / image.size.height)
+                            let size = CGSize(width: image.size.width * ratio, height: image.size.height * ratio)
+                            let origin = CGPoint(x: (geometry.size.width - size.width) / 2,
+                                                 y: (geometry.size.height - size.height) / 2)
+                            Image(uiImage: image).resizable().frame(width: size.width, height: size.height)
+                                .position(x: geometry.size.width / 2, y: geometry.size.height / 2)
+                            let selectedRegion = displayedRegion(origin: origin, size: size)
+                            if let selectedRegion {
+                                Rectangle().fill(.black.opacity(0.4))
+                                    .mask(Rectangle().overlay(
+                                        Rectangle().frame(width: selectedRegion.width, height: selectedRegion.height)
+                                            .position(x: selectedRegion.midX, y: selectedRegion.midY)
+                                            .blendMode(.destinationOut)))
+                                Rectangle().strokeBorder(EditorStyle.accent, lineWidth: 2)
+                                    .frame(width: selectedRegion.width, height: selectedRegion.height)
+                                    .position(x: selectedRegion.midX, y: selectedRegion.midY)
+                                    .accessibilityIdentifier("reference-region")
+                            }
+                            Rectangle().fill(.clear).contentShape(Rectangle())
+                                .frame(width: size.width, height: size.height)
+                                .accessibilityLabel("主图主体框选区域")
+                                .accessibilityIdentifier("reference-selector-canvas")
+                                .position(x: geometry.size.width / 2, y: geometry.size.height / 2)
+                                .gesture(DragGesture(minimumDistance: 4)
+                                    .onChanged { value in
+                                        dragStart = dragStart ?? value.startLocation
+                                        dragEnd = value.location
+                                    }
+                                    .onEnded { value in
+                                        let start = dragStart ?? value.startLocation
+                                        let end = value.location
+                                        dragStart = nil
+                                        dragEnd = nil
+                                        let left = max(0, min(size.width, min(start.x, end.x)))
+                                        let right = max(0, min(size.width, max(start.x, end.x)))
+                                        let top = max(0, min(size.height, min(start.y, end.y)))
+                                        let bottom = max(0, min(size.height, max(start.y, end.y)))
+                                        guard right - left >= size.width * 0.08,
+                                              bottom - top >= size.height * 0.08 else { return }
+                                        store.update {
+                                            $0.configuration.region = StackRegion(x: Double(left / size.width),
+                                                y: Double(1 - bottom / size.height),
+                                                width: Double((right - left) / size.width),
+                                                height: Double((bottom - top) / size.height))
+                                        }
+                                    })
+                        } else if loading {
+                            ProgressView("正在载入主图…")
+                        } else {
+                            Text("请选择一张主图").foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .frame(maxHeight: .infinity)
+                Text("拖动框住 M42 和周围至少 8 颗清晰星星。其他照片只需拍到相同星区，框外允许裁切和位移。")
+                    .font(.subheadline).foregroundStyle(.secondary).padding(.horizontal)
+                HStack {
+                    Button("使用整张主图") { store.update { $0.configuration.region = nil } }
+                    Spacer()
+                    Button("完成") { store.flushSave(); dismiss() }.buttonStyle(.borderedProminent)
+                }.padding()
+            }
+            .background(EditorStyle.backdrop)
+            .navigationTitle("选择主图与主体")
+            .navigationBarTitleDisplayMode(.inline)
+            .onAppear { if let selected { load(selected) } }
+        }
+    }
+
+    private func displayedRegion(origin: CGPoint, size: CGSize) -> CGRect? {
+        if let start = dragStart, let end = dragEnd {
+            return CGRect(x: origin.x + min(start.x, end.x), y: origin.y + min(start.y, end.y),
+                          width: abs(end.x - start.x), height: abs(end.y - start.y))
+        }
+        guard let region = store.project?.configuration.region else { return nil }
+        return CGRect(x: origin.x + CGFloat(region.x) * size.width,
+                      y: origin.y + CGFloat(1 - region.y - region.height) * size.height,
+                      width: CGFloat(region.width) * size.width, height: CGFloat(region.height) * size.height)
+    }
+
+    private func load(_ frame: FrameRecord) {
+        guard let project = store.project else { return }
+        loading = true
+        Task {
+            do {
+                let source = try await Task.detached {
+                    let repository = try ProjectRepository()
+                    let pipeline = ImagePipeline()
+                    let decoded = try pipeline.decode(repository.url(project, frame.fileName))
+                    let rendered = try pipeline.preview(image: decoded, adjustments: .neutral, maxSide: 1600)
+                    return UIImage(cgImage: rendered)
+                }.value
+                guard selected?.id == frame.id else { return }
+                image = source
+            } catch { store.message = "主图预览失败：\(error.localizedDescription)" }
+            loading = false
+        }
     }
 }
