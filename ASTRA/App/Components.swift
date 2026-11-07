@@ -38,23 +38,11 @@ struct HistogramView: View {
         }.frame(height: 42).accessibilityLabel("亮度直方图")
     }
 }
-struct AdjustmentSlider: View {
-    let title: String
-    @Binding var value: Double
-    let range: ClosedRange<Double>
-    var format = "%.2f"
-    var checkpoint: () -> Void = {}
-    var body: some View {
-        VStack(spacing: 5) {
-            HStack { Text(title).font(.subheadline); Spacer(); Text(String(format: format, value)).font(.caption.monospacedDigit()).foregroundStyle(.secondary) }
-            Slider(value: $value, in: range, onEditingChanged: { if $0 { checkpoint() } }).accessibilityLabel(title)
-        }
-    }
-}
 struct PhotoCanvas: View {
     var image: UIImage?
     var original: UIImage?
     var skyFraction: Double?
+    var showOriginal = false
     @State private var comparing = false
     @State private var zoom = 1.0
     @State private var offset = CGSize.zero
@@ -65,7 +53,7 @@ struct PhotoCanvas: View {
             ZStack {
                 Color.black
                 if let image {
-                    let photo = comparing ? (original ?? image) : image
+                    let photo = comparing || showOriginal ? (original ?? image) : image
                     let fitted = fit(photo.size, into: geo.size)
                     Image(uiImage: photo).resizable().scaledToFit().frame(width: fitted.width, height: fitted.height)
                         .scaleEffect(min(8, max(1, zoom * scale)))
@@ -78,7 +66,7 @@ struct PhotoCanvas: View {
                 } else {
                     VStack(spacing: 12) { Image(systemName: "sparkles.rectangle.stack").font(.system(size: 42, weight: .ultraLight)); Text("让每一颗星，都更清晰").font(.headline); Text("从相册或文件导入照片开始处理").font(.caption).foregroundStyle(.secondary) }.foregroundStyle(.white.opacity(0.8))
                 }
-                if comparing { VStack { Badge(text: "调整前", color: .white); Spacer() }.padding(10) }
+                if comparing || showOriginal { VStack { Badge(text: "调整前", color: .white); Spacer() }.padding(10) }
             }
             .contentShape(Rectangle()).clipped()
             .gesture(MagnifyGesture().updating($scale) { value, state, _ in state = value.magnification }.onEnded { value in zoom = min(8, max(1, zoom * value.magnification)); if zoom <= 1 { offset = .zero } })

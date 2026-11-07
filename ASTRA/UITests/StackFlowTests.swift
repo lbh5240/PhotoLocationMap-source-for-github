@@ -21,6 +21,50 @@ final class StackFlowTests: XCTestCase {
     }
 
     @MainActor
+    func testEditorDockAndPrecisionControls() {
+        let app = launch(with: "good")
+        let stack = app.buttons["editor-tool-stack"]
+        let pager = app.buttons["editor-dock-page"]
+        XCTAssertTrue(stack.exists && pager.exists)
+        let trailingEdge = pager.frame.maxX
+        app.buttons["editor-tool-light"].tap()
+        let exposure = app.staticTexts["ruler-value"]
+        XCTAssertTrue(exposure.waitForExistence(timeout: 5))
+        XCTAssertEqual(exposure.label, "0.00 EV")
+        app.buttons["增大曝光"].tap()
+        XCTAssertEqual(exposure.label, "0.05 EV")
+        capture("ASTRA-LIGHT", app: app)
+
+        pager.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            .press(forDuration: 0.05, thenDragTo: stack.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)))
+        let curves = app.buttons["editor-tool-curves"]
+        XCTAssertTrue(curves.waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertEqual(pager.frame.maxX, trailingEdge, accuracy: 1)
+        curves.tap()
+        let graph = app.descendants(matching: .any)["tone-curve-graph"].firstMatch
+        XCTAssertTrue(graph.waitForExistence(timeout: 5))
+        let midpoint = graph.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        midpoint.press(forDuration: 0.05, thenDragTo: graph.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.32)))
+        XCTAssertNotEqual(app.staticTexts["ruler-value"].label, "0.50")
+        capture("ASTRA-CURVES", app: app)
+
+        pager.tap()
+        XCTAssertTrue(stack.waitForExistence(timeout: 5))
+        XCTAssertEqual(pager.frame.maxX, trailingEdge, accuracy: 1)
+        app.buttons["editor-tool-wheels"].tap()
+        XCTAssertTrue(app.buttons["中间调"].waitForExistence(timeout: 5))
+        capture("ASTRA-WHEELS", app: app)
+    }
+
+    @MainActor
+    private func capture(_ name: String, app: XCUIApplication) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    @MainActor
     private func launch(with fixture: String) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["ASTRA_UI_STACK_FIXTURE"] = fixture

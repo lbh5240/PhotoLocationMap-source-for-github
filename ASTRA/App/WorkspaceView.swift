@@ -9,6 +9,10 @@ private enum ToolPanel: String, CaseIterable {
 struct WorkspaceView: View {
     @EnvironmentObject private var store: AppStore
     @State private var panel = ToolPanel.stack
+    @State private var dockPage = 0
+    @State private var comparing = false
+    @State private var canvasOnly = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var importing = false
     @State private var pickingPhotos = false
     @State private var selectedPhotos: [PhotosPickerItem] = []
@@ -18,37 +22,33 @@ struct WorkspaceView: View {
     @State private var showRename = false
     @State private var name = ""
     var body: some View {
-        ZStack {
-            Color(red: 0.025, green: 0.028, blue: 0.04).ignoresSafeArea()
-            if let p = store.project {
-                VStack(spacing: 0) {
-                    HStack(spacing: 8) {
-                        Badge(text: p.result == nil ? "原片预览" : "\(p.result!.acceptedFrames) 帧合成", color: .mint)
-                        Text(info(p)).font(.caption2.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1)
-                        Spacer()
-                        if !p.frames.isEmpty { Button { showFrames = true } label: { Image(systemName: "rectangle.stack").padding(8) }.accessibilityLabel("管理照片") }
-                    }.padding(.horizontal, 16).padding(.vertical, 8)
-                    PhotoCanvas(image: store.preview, original: store.beforePreview, skyFraction: panel == .stack && p.configuration.mode == .landscape ? p.configuration.skyFraction : nil)
-                        .frame(minHeight: 160).overlay(alignment: .bottomTrailing) {
-                            if store.preview != nil { Text("长按比较 · 双指缩放").font(.system(size: 10)).foregroundStyle(.white.opacity(0.5)).padding(8).allowsHitTesting(false) }
-                        }
+        GeometryReader { geometry in
+            if let project = store.project {
+                let panelHeight = min(300, max(200, geometry.size.height * 0.42))
+                VStack(spacing: 9) {
+                    canvasHeader(project)
+                    PhotoCanvas(image: store.preview, original: store.beforePreview,
+                                skyFraction: !canvasOnly && panel == .stack && project.configuration.mode == .landscape ? project.configuration.skyFraction : nil,
+                                showOriginal: comparing)
+                        .frame(minHeight: 112)
+                        .clipShape(RoundedRectangle(cornerRadius: 18))
+                        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(EditorStyle.line).allowsHitTesting(false))
+                        .layoutPriority(1)
                     if store.busy { progressView }
-                    if !store.busy, panel == .stack, let notice = store.stackNotice, notice.projectID == p.id {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Label(notice.title, systemImage: notice.failed ? "exclamationmark.triangle" : "checkmark.circle")
-                                .font(.subheadline.weight(.semibold)).accessibilityIdentifier("stack-result-title")
-                            Text(notice.detail).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                        }.foregroundStyle(notice.failed ? Color.orange : Color.mint)
-                            .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16).padding(.vertical, 10)
-                    }
-                    VStack(spacing: 12) {
-                        if panel != .stack { HistogramView(values: store.histogram).padding(.horizontal, 8) }
-                        ScrollView { controls(p).padding(.horizontal, 4).padding(.bottom, 8) }.frame(height: panel == .wheels ? 250 : panel == .stack ? 214 : 198)
+                    if !canvasOnly || store.busy {
+                        if !store.busy, panel == .stack, let notice = store.stackNotice, notice.projectID == project.id {
+                            resultNotice(notice)
+                        }
+                        inspector(project).frame(height: panelHeight)
                         toolBar
-                    }.padding(16).background(Color(red: 0.045, green: 0.05, blue: 0.07))
+                    }
                 }
+                .padding(.horizontal, 12).padding(.top, 3).padding(.bottom, 5)
+                .frame(maxWidth: 760)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .background(EditorStyle.backdrop.ignoresSafeArea())
         .navigationTitle(store.project?.name ?? "ASTRA").navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(store.busy)
         .toolbar {
@@ -101,112 +101,346 @@ struct WorkspaceView: View {
             if store.progress == 0 { ProgressView().frame(maxWidth: .infinity) } else { ProgressView(value: store.progress).tint(.mint) }
         }.padding(14).background(.white.opacity(0.05))
     }
-    private var toolBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            GlassEffectContainer(spacing: 8) {
-                HStack(spacing: 6) {
-                    ForEach(ToolPanel.allCases, id: \.self) { item in
-                        Button { withAnimation(.snappy) { panel = item } } label: {
-                            VStack(spacing: 5) { Image(systemName: item.symbol).font(.system(size: 17)); Text(item.rawValue).font(.system(size: 10, weight: .medium)) }
-                                .frame(width: 54, height: 48).foregroundStyle(panel == item ? Color.white : Color.secondary)
-                                .background(panel == item ? Color.indigo.opacity(0.3) : .clear, in: RoundedRectangle(cornerRadius: 16))
-                        }.buttonStyle(.plain)
-                    }
-                }.padding(5).astroGlass()
+    private func canvasHeader(_ project: AstroProject) -> some View {
+        HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(project.result.map { "合成 · \($0.acceptedFrames) 帧" } ?? (project.frames.isEmpty ? "工作台" : "原片"))
+                    .font(.caption.weight(.semibold)).foregroundStyle(EditorStyle.accent)
+                Text(info(project)).font(.caption2.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1)
             }
-        }.disabled(store.busy)
+            Spacer(minLength: 4)
+            if !project.frames.isEmpty {
+                canvasButton("rectangle.stack", label: "管理照片") { showFrames = true }
+            }
+            if store.preview != nil {
+                canvasButton("square.split.2x1", label: comparing ? "查看调整后" : "对比原图", selected: comparing) { comparing.toggle() }
+                canvasButton(canvasOnly ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
+                             label: canvasOnly ? "显示编辑面板" : "只看画面", selected: canvasOnly) { canvasOnly.toggle() }
+            }
+        }.padding(.horizontal, 4)
     }
+
+    private func canvasButton(_ symbol: String, label: String, selected: Bool = false, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol).font(.system(size: 15, weight: .medium))
+                .frame(width: 44, height: 44).contentShape(Rectangle())
+                .foregroundStyle(selected ? EditorStyle.accent : Color.secondary)
+                .background(selected ? EditorStyle.accent.opacity(0.12) : EditorStyle.surface, in: RoundedRectangle(cornerRadius: 13))
+        }.buttonStyle(.plain).accessibilityLabel(label)
+    }
+
+    private func resultNotice(_ notice: StackNotice) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Label(notice.title, systemImage: notice.failed ? "exclamationmark.triangle" : "checkmark.circle")
+                .font(.caption.weight(.semibold)).accessibilityIdentifier("stack-result-title")
+            Text(notice.detail).font(.caption2).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        }
+        .foregroundStyle(notice.failed ? Color.orange : EditorStyle.accent)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12).padding(.vertical, 8)
+        .background(EditorStyle.surface, in: RoundedRectangle(cornerRadius: 13))
+    }
+
+    private func inspector(_ project: AstroProject) -> some View {
+        VStack(spacing: 7) {
+            HStack {
+                Label(panel.rawValue, systemImage: panel.symbol).font(.subheadline.weight(.semibold))
+                Spacer()
+                if panel == .stack {
+                    Button("\(project.frames.filter(\.included).count) 张已选") { showFrames = true }
+                        .font(.caption2.monospacedDigit()).foregroundStyle(EditorStyle.accent).disabled(store.busy)
+                } else if !store.histogram.isEmpty && panel != .curves {
+                    HistogramView(values: store.histogram).frame(width: 80, height: 22)
+                }
+            }.padding(.horizontal, 3).frame(minHeight: 24)
+            ScrollView {
+                controls(project).padding(.horizontal, 2).padding(.vertical, 1).disabled(store.busy)
+            }.scrollIndicators(.hidden).id(panel)
+            if panel == .stack { stackActions(project) }
+        }
+        .padding(10)
+        .background(EditorStyle.surface.opacity(0.42), in: RoundedRectangle(cornerRadius: 20))
+        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(EditorStyle.line).allowsHitTesting(false))
+    }
+
+    private var toolBar: some View {
+        let items: [ToolPanel] = dockPage == 0 ? [.stack, .light, .color, .wheels] : [.curves, .hsl, .detail]
+        return VStack(spacing: 0) {
+            HStack(spacing: 4) {
+                ForEach(items, id: \.self) { item in
+                    Button { panel = item; comparing = false } label: {
+                        VStack(spacing: 4) {
+                            Image(systemName: item.symbol).font(.system(size: 16, weight: .medium))
+                            Text(item.rawValue).font(.caption2.weight(.medium)).lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                        .contentShape(Rectangle())
+                        .foregroundStyle(panel == item ? EditorStyle.accent : Color.secondary)
+                        .background(panel == item ? EditorStyle.accent.opacity(0.13) : .clear, in: RoundedRectangle(cornerRadius: 14))
+                    }.buttonStyle(.plain).accessibilityAddTraits(panel == item ? .isSelected : [])
+                        .accessibilityIdentifier("editor-tool-\(item)")
+                }
+                Button { changePage(1 - dockPage) } label: {
+                    VStack(spacing: 4) {
+                        Image(systemName: dockPage == 0 ? "chevron.right" : "chevron.left").font(.system(size: 12, weight: .semibold))
+                        Text("\(dockPage + 1)/2").font(.system(size: 9, weight: .medium, design: .monospaced))
+                    }.frame(width: 44, height: 48).contentShape(Rectangle()).foregroundStyle(.secondary)
+                }.buttonStyle(.plain).accessibilityLabel(dockPage == 0 ? "更多编辑工具" : "返回基础工具")
+                    .accessibilityIdentifier("editor-dock-page")
+            }
+            .padding(6)
+        }
+        .astroGlass()
+        .contentShape(RoundedRectangle(cornerRadius: 24))
+        .simultaneousGesture(DragGesture(minimumDistance: 24).onEnded { drag in
+            let dx = drag.translation.width, dy = drag.translation.height
+            guard abs(dx) > 35, abs(dx) > abs(dy) * 1.4 else { return }
+            changePage(dx < 0 ? 1 : 0)
+        })
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("editor-dock")
+        .disabled(store.busy)
+    }
+
+    private func changePage(_ page: Int) {
+        guard !store.busy, dockPage != page else { return }
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.16)) { dockPage = page }
+    }
+
     @ViewBuilder private func controls(_ p: AstroProject) -> some View {
         switch panel {
         case .stack: stackControls(p)
         case .light:
-            VStack(spacing: 13) {
-                slider("曝光 / EV", \.exposure, -5...5)
-                slider("对比度", \.contrast, 0.5...1.8)
-                slider("高光", \.highlights, 0...1)
-                slider("阴影", \.shadows, -1...1)
-                slider("黑场抬升", \.black, 0...0.15)
-            }
+            ParameterInspector(parameters: [
+                parameter("曝光", "sun.max", \.exposure, -5...5, step: 0.05, unit: "EV"),
+                parameter("对比度", "circle.lefthalf.filled", \.contrast, 0.5...1.8),
+                parameter("高光", "sun.horizon", \.highlights, 0...1),
+                parameter("阴影", "moon", \.shadows, -1...1),
+                parameter("黑场", "circle.fill", \.black, 0...0.15, step: 0.005, precision: 3)
+            ], checkpoint: store.checkpoint).id(ToolPanel.light)
         case .color:
-            VStack(spacing: 13) {
-                HStack { ForEach(Array(["自然银河", "冷调暗夜", "暗部提亮"].enumerated()), id: \.offset) { i, title in Button(title) { store.preset(i) }.font(.caption).buttonStyle(.bordered) } }
-                slider("冷暖 · 相对原片", \.warmth, -100...100)
-                slider("色调", \.tint, -100...100)
-                slider("饱和度", \.saturation, 0...2)
-                slider("自然饱和度", \.vibrance, -1...1)
+            VStack(spacing: 8) {
+                HStack(spacing: 5) {
+                    ForEach(Array(["自然银河", "冷调暗夜", "暗部提亮"].enumerated()), id: \.offset) { index, name in
+                        Button(name) { store.preset(index) }.font(.caption2.weight(.medium)).buttonStyle(.bordered)
+                    }
+                }
+                ParameterInspector(parameters: [
+                    parameter("冷暖", "thermometer.medium", \.warmth, -100...100, step: 1, precision: 0),
+                    parameter("色调", "drop", \.tint, -100...100, step: 1, precision: 0),
+                    parameter("饱和度", "circle.hexagongrid", \.saturation, 0...2),
+                    parameter("自然饱和", "sparkle", \.vibrance, -1...1)
+                ], checkpoint: store.checkpoint).id(ToolPanel.color)
             }
         case .curves: CurveControls()
         case .wheels: ColorWheelsPanel()
         case .hsl: HSLControls()
         case .detail:
-            VStack(alignment: .leading, spacing: 14) {
-                slider("亮度 / 彩色降噪", \.noise, 0...1)
-                slider("亮度锐化", \.sharpness, 0...1.5)
-                Text("堆栈先通过多帧平均改善信噪比，这里的空间降噪用于微调。较强降噪可能损失暗星，请配合调整前后比较。").font(.caption).foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 8) {
+                ParameterInspector(parameters: [
+                    parameter("降噪", "circle.dotted", \.noise, 0...1),
+                    parameter("锐化", "triangle", \.sharpness, 0...1.5)
+                ], checkpoint: store.checkpoint).id(ToolPanel.detail)
+                Text("加强降噪可能损失暗星。用对比按钮检查调整前后。").font(.caption2).foregroundStyle(.secondary)
             }
         }
     }
-    private func slider(_ title: String, _ key: WritableKeyPath<Adjustments, Double>, _ range: ClosedRange<Double>) -> some View {
-        AdjustmentSlider(title: title, value: Binding(get: { store.project?.adjustments[keyPath: key] ?? 0 }, set: { v in store.update({ $0.adjustments[keyPath: key] = v }, render: true) }), range: range, checkpoint: store.checkpoint).disabled(store.busy)
+
+    private func parameter(_ title: String, _ symbol: String, _ key: WritableKeyPath<Adjustments, Double>,
+                           _ range: ClosedRange<Double>, step: Double = 0.01, precision: Int = 2, unit: String = "") -> EditorParameter {
+        let neutral = Adjustments.neutral[keyPath: key]
+        let binding = Binding(get: { store.project?.adjustments[keyPath: key] ?? neutral }, set: { value in
+            store.update({ $0.adjustments[keyPath: key] = value }, render: true)
+        })
+        return EditorParameter(title: title, symbol: symbol, value: binding, range: range, neutral: neutral,
+                               step: step, precision: precision, unit: unit)
     }
-    private func stackControls(_ p: AstroProject) -> some View {
-        VStack(alignment: .leading, spacing: 13) {
-            Picker("合成模式", selection: Binding(get: { p.configuration.mode }, set: { v in store.update { $0.configuration.mode = v } })) {
-                ForEach(StackMode.allCases) { mode in Text(mode.title).tag(mode) }
-            }.pickerStyle(.segmented)
-            HStack {
-                Text(p.configuration.mode.subtitle).font(.caption).foregroundStyle(.secondary)
-                Spacer(); Button("\(p.frames.filter(\.included).count) 张已选") { showFrames = true }.font(.caption)
+
+    private func stackControls(_ project: AstroProject) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                ForEach(StackMode.allCases) { mode in
+                    let selected = project.configuration.mode == mode
+                    Button { store.update { $0.configuration.mode = mode } } label: {
+                        VStack(spacing: 5) {
+                            Image(systemName: mode.symbol).font(.system(size: 14, weight: .medium))
+                            Text(mode.title).font(.caption2.weight(.medium)).lineLimit(1)
+                        }.frame(maxWidth: .infinity, minHeight: 49)
+                            .foregroundStyle(selected ? EditorStyle.accent : Color.secondary)
+                            .background(selected ? EditorStyle.accent.opacity(0.13) : EditorStyle.surface, in: RoundedRectangle(cornerRadius: 11))
+                            .overlay(RoundedRectangle(cornerRadius: 11).strokeBorder(selected ? EditorStyle.accent.opacity(0.28) : EditorStyle.line))
+                    }.buttonStyle(.plain).accessibilityAddTraits(selected ? .isSelected : [])
+                }
             }
-            if p.configuration.mode == .landscape {
-                AdjustmentSlider(title: "天空占画面高度", value: Binding(get: { p.configuration.skyFraction }, set: { v in store.update { $0.configuration.skyFraction = v } }), range: 0.15...1, format: "%.2f")
-                Text("水平分界适用于平坦地景。山峰、树木等复杂边缘暂不支持精细蒙版。").font(.caption2).foregroundStyle(.secondary)
-            } else if p.configuration.mode != .trails {
-                AdjustmentSlider(title: "异常值剔除 / Sigma", value: Binding(get: { p.configuration.sigma }, set: { v in store.update { $0.configuration.sigma = v } }), range: 1.5...5, format: "%.1f")
-                Text("至少 5 帧启用稳健剔除；2–4 帧使用加权平均。").font(.caption2).foregroundStyle(.secondary)
-            } else { Text("最大值混合会保留飞机与卫星光带，请在帧列表排除不需要的照片。").font(.caption).foregroundStyle(.secondary).padding(.vertical, 8) }
-            HStack(spacing: 10) {
-                Menu { importActions } label: {
-                    Label("导入照片", systemImage: "plus").frame(maxWidth: .infinity).padding(.vertical, 4)
-                }.buttonStyle(.bordered)
-                Button(action: store.startStack) { Label("开始合成", systemImage: "sparkles").frame(maxWidth: .infinity).padding(.vertical, 4) }.buttonStyle(.borderedProminent).disabled(p.frames.filter(\.included).count < 2)
-                    .accessibilityIdentifier("start-stack")
+            Text(project.configuration.mode.subtitle).font(.caption2).foregroundStyle(.secondary)
+            if project.configuration.mode == .landscape {
+                PrecisionRuler(title: "天空占比", value: Binding(get: { project.configuration.skyFraction }, set: { value in
+                    store.update { $0.configuration.skyFraction = value }
+                }), range: 0.15...1, neutral: StackConfiguration().skyFraction)
+                Text("按画面里的水平线划分天空和地景。").font(.caption2).foregroundStyle(.secondary)
+            } else if project.configuration.mode == .sky {
+                PrecisionRuler(title: "异常值剔除", value: Binding(get: { project.configuration.sigma }, set: { value in
+                    store.update { $0.configuration.sigma = value }
+                }), range: 1.5...5, neutral: StackConfiguration().sigma, step: 0.1, precision: 1, unit: "σ")
+                Text("至少 5 帧启用稳健剔除，2–4 帧使用加权平均。").font(.caption2).foregroundStyle(.secondary)
+            } else {
+                Text("最大值混合会保留飞机与卫星光带。请在照片列表排除不需要的帧。").font(.caption2).foregroundStyle(.secondary)
             }
         }.disabled(store.busy)
     }
+
+    private func stackActions(_ project: AstroProject) -> some View {
+        HStack(spacing: 8) {
+            Menu { importActions } label: {
+                Label("导入照片", systemImage: "plus").frame(maxWidth: .infinity, minHeight: 27)
+            }.buttonStyle(.bordered)
+            Button(action: store.startStack) {
+                Label("开始合成", systemImage: "sparkles").frame(maxWidth: .infinity, minHeight: 27)
+            }.buttonStyle(.borderedProminent).tint(EditorStyle.accent).foregroundStyle(.black)
+                .disabled(project.frames.filter(\.included).count < 2)
+                .accessibilityIdentifier("start-stack")
+        }.font(.subheadline.weight(.semibold)).disabled(store.busy)
+    }
+
 }
 private struct CurveControls: View {
+    private enum Point: Int, CaseIterable {
+        case shadows, midtones, highlights
+        var key: WritableKeyPath<Adjustments, Double> {
+            switch self { case .shadows: \.curveLow; case .midtones: \.curveMid; case .highlights: \.curveHigh }
+        }
+        var title: String { ["暗调", "中间调", "亮调"][rawValue] }
+        var input: Double { Double(rawValue + 1) / 4 }
+        var range: ClosedRange<Double> { [0...0.5, 0.2...0.8, 0.5...1][rawValue] }
+    }
     @EnvironmentObject private var store: AppStore
-    private func binding(_ key: WritableKeyPath<Adjustments, Double>) -> Binding<Double> { Binding(get: { store.project?.adjustments[keyPath: key] ?? 0 }, set: { v in store.update({ $0.adjustments[keyPath: key] = v }, render: true) }) }
+    @State private var point = Point.midtones
+    @State private var draggingPoint: Point?
+    @GestureState private var dragging = false
+
+    private var adjustments: Adjustments { store.project?.adjustments ?? .neutral }
+    private var binding: Binding<Double> {
+        Binding(get: { adjustments[keyPath: point.key] }, set: { set(point, $0) })
+    }
+
     var body: some View {
-        VStack(spacing: 14) {
-            Canvas { ctx, size in
-                guard let a = store.project?.adjustments else { return }
-                let points = [a.black, a.curveLow, a.curveMid, a.curveHigh, 1]
-                for i in 0...4 { let v = CGFloat(i)/4; let p = Path { p in p.move(to: CGPoint(x: v*size.width, y: 0)); p.addLine(to: CGPoint(x: v*size.width, y: size.height)) }; ctx.stroke(p, with: .color(.white.opacity(0.08))) }
-                var line = Path()
-                for (i,y) in points.enumerated() { let point = CGPoint(x: CGFloat(i)/4*size.width, y: (1-y)*size.height); if i==0 { line.move(to: point) } else { line.addLine(to: point) }; ctx.fill(Path(ellipseIn: CGRect(x: point.x-3,y: point.y-3,width: 6,height: 6)), with: .color(.mint)) }
-                ctx.stroke(line, with: .color(.mint), lineWidth: 1.5)
-            }.frame(height: 65).accessibilityLabel("曲线控制点位置示意")
-            AdjustmentSlider(title: "暗调 · 输入 25%", value: binding(\.curveLow), range: 0...0.5, checkpoint: store.checkpoint)
-            AdjustmentSlider(title: "中间调 · 输入 50%", value: binding(\.curveMid), range: 0.2...0.8, checkpoint: store.checkpoint)
-            AdjustmentSlider(title: "亮调 · 输入 75%", value: binding(\.curveHigh), range: 0.5...1, checkpoint: store.checkpoint)
+        VStack(spacing: 7) {
+            graph.frame(height: 112)
+            HStack(spacing: 6) {
+                ForEach(Point.allCases, id: \.self) { item in
+                    Button { point = item } label: {
+                        Text(item.title).font(.caption2.weight(.medium))
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .foregroundStyle(point == item ? EditorStyle.accent : Color.secondary)
+                            .background(point == item ? EditorStyle.accent.opacity(0.12) : EditorStyle.surface, in: RoundedRectangle(cornerRadius: 10))
+                    }.buttonStyle(.plain).accessibilityAddTraits(point == item ? .isSelected : [])
+                }
+            }
+            PrecisionRuler(title: point.title, value: binding, range: point.range, neutral: point.input,
+                           checkpoint: store.checkpoint).id(point)
         }.disabled(store.busy)
     }
+
+    private var graph: some View {
+        GeometryReader { geometry in
+            let inset: CGFloat = 11
+            let width = max(geometry.size.width - inset * 2, 1)
+            let height = max(geometry.size.height - inset * 2, 1)
+            Canvas { context, _ in
+                func location(_ x: Double, _ y: Double) -> CGPoint {
+                    CGPoint(x: inset + x * width, y: inset + (1 - y) * height)
+                }
+                let histogram = store.histogram
+                if histogram.count > 1 {
+                    var distribution = Path()
+                    distribution.move(to: location(0, 0))
+                    for (i, level) in histogram.enumerated() {
+                        distribution.addLine(to: location(Double(i) / Double(histogram.count - 1), level * 0.88))
+                    }
+                    distribution.addLine(to: location(1, 0)); distribution.closeSubpath()
+                    context.fill(distribution, with: .color(EditorStyle.accent.opacity(0.11)))
+                }
+                var grid = Path()
+                for i in 0...4 {
+                    let position = Double(i) / 4
+                    grid.move(to: location(position, 0)); grid.addLine(to: location(position, 1))
+                    grid.move(to: location(0, position)); grid.addLine(to: location(1, position))
+                }
+                context.stroke(grid, with: .color(EditorStyle.line))
+                let baseline = Path { path in path.move(to: location(0, 0)); path.addLine(to: location(1, 1)) }
+                context.stroke(baseline, with: .color(.white.opacity(0.22)), style: StrokeStyle(lineWidth: 1, dash: [3, 4]))
+                var curve = Path()
+                curve.move(to: location(0, adjustments.black))
+                for item in Point.allCases { curve.addLine(to: location(item.input, adjustments[keyPath: item.key])) }
+                curve.addLine(to: location(1, 1))
+                context.stroke(curve, with: .color(EditorStyle.accent), style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
+                for item in Point.allCases {
+                    let center = location(item.input, adjustments[keyPath: item.key])
+                    let radius: CGFloat = item == point ? 5 : 3.5
+                    let dot = Path(ellipseIn: CGRect(x: center.x-radius, y: center.y-radius, width: radius*2, height: radius*2))
+                    context.fill(dot, with: .color(item == point ? EditorStyle.accent : EditorStyle.surface))
+                    context.stroke(dot, with: .color(EditorStyle.accent), lineWidth: 1.2)
+                }
+            }.contentShape(Rectangle())
+                .gesture(DragGesture(minimumDistance: 3)
+                    .updating($dragging) { _, state, _ in state = true }
+                    .onChanged { gesture in
+                        if draggingPoint == nil {
+                            let start = (gesture.startLocation.x - inset) / width
+                            let nearest = Point.allCases.min { abs($0.input - start) < abs($1.input - start) } ?? .midtones
+                            point = nearest
+                            draggingPoint = nearest
+                            store.checkpoint()
+                        }
+                        if let draggingPoint { set(draggingPoint, 1 - (gesture.location.y - inset) / height) }
+                    })
+                .onChange(of: dragging) { _, active in if !active { draggingPoint = nil } }
+                .accessibilityLabel("曲线图，拖动控制点调整对应亮度")
+                .accessibilityIdentifier("tone-curve-graph")
+        }.background(EditorStyle.surface, in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private func set(_ point: Point, _ value: Double) {
+        let clamped = min(point.range.upperBound, max(point.range.lowerBound, value))
+        store.update({ $0.adjustments[keyPath: point.key] = clamped }, render: true)
+    }
 }
+
 private struct HSLControls: View {
     @EnvironmentObject private var store: AppStore
     @State private var band = 0
     private let colors: [Color] = [.red, .yellow, .green, .cyan, .blue, .purple]
     private let names = ["红", "黄", "绿", "青", "蓝", "洋红"]
-    private func binding(_ key: WritableKeyPath<HSLBand, Double>) -> Binding<Double> { Binding(get: { store.project?.adjustments.hsl[band][keyPath: key] ?? 0 }, set: { v in store.update({ $0.adjustments.hsl[band][keyPath: key] = v }, render: true) }) }
+
     var body: some View {
-        VStack(spacing: 14) {
-            HStack(spacing: 20) { ForEach(0..<6) { i in Button { band = i } label: { Circle().fill(colors[i]).frame(width: 24,height: 24).padding(4).overlay(Circle().stroke(band == i ? .white : .clear,lineWidth: 1.5)) }.accessibilityLabel(names[i]) } }.frame(maxWidth: .infinity)
-            AdjustmentSlider(title: "\(names[band]) · 色相 / °", value: binding(\.hue), range: -40...40, format: "%.0f", checkpoint: store.checkpoint)
-            AdjustmentSlider(title: "饱和度", value: binding(\.saturation), range: -1...1, checkpoint: store.checkpoint)
-            AdjustmentSlider(title: "明度", value: binding(\.luminance), range: -1...1, checkpoint: store.checkpoint)
+        VStack(spacing: 7) {
+            HStack(spacing: 4) {
+                ForEach(0..<colors.count, id: \.self) { index in
+                    Button { band = index } label: {
+                        Circle().fill(colors[index].gradient).frame(width: 21, height: 21)
+                            .padding(4)
+                            .overlay(Circle().strokeBorder(band == index ? .white : .clear, lineWidth: 1.5))
+                            .frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
+                    }.buttonStyle(.plain).accessibilityLabel(names[index])
+                        .accessibilityAddTraits(band == index ? .isSelected : [])
+                }
+            }
+            ParameterInspector(parameters: [
+                adjustment("色相", "circle.lefthalf.filled", \.hue, -40...40, step: 1, precision: 0, unit: "°"),
+                adjustment("饱和度", "drop", \.saturation, -1...1),
+                adjustment("明度", "sun.max", \.luminance, -1...1)
+            ], tint: colors[band].opacity(0.85), checkpoint: store.checkpoint).id(band)
         }.disabled(store.busy)
+    }
+
+    private func adjustment(_ title: String, _ symbol: String, _ key: WritableKeyPath<HSLBand, Double>,
+                            _ range: ClosedRange<Double>, step: Double = 0.01, precision: Int = 2, unit: String = "") -> EditorParameter {
+        let index = band
+        let value = Binding(get: { store.project?.adjustments.hsl[index][keyPath: key] ?? 0 }, set: { newValue in
+            store.update({ $0.adjustments.hsl[index][keyPath: key] = newValue }, render: true)
+        })
+        return EditorParameter(title: title, symbol: symbol, value: value, range: range, neutral: 0,
+                               step: step, precision: precision, unit: unit)
     }
 }
 struct FramesView: View {
