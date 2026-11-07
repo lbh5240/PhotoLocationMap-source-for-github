@@ -162,7 +162,10 @@ public final class MainActivity extends Activity {
     }
     void startStack(){
         if(busy){if(cancellable){NativeEngine.cancel();setStatus("正在安全停止…");}return;}if(project==null)return;
-        ArrayList<Project.Frame> selected=new ArrayList<>();for(Project.Frame f:project.frames)if(f.included)selected.add(f);
+        ArrayList<Project.Frame> selected;
+        try { selected=project.selectedForStack(); } catch(Exception error) { setStatus("无法合成。"+error.getMessage()); return; }
+        long selectedCount=project.frames.stream().filter(f->f.included).count();
+        String formatNote=selected.size()<selectedCount?"JPEG+RAW 已分组，所选的另一格式未参与。\n":"";
         if(selected.size()<2){setStatus("无法合成。请在照片列表选择至少两张照片。");return;}
         int width=selected.get(0).width,height=selected.get(0).height;
         for(Project.Frame frame:selected)if(frame.width!=width||frame.height!=height){setStatus("无法合成。照片尺寸不同，请排除裁切或方向不同的照片。");return;}
@@ -173,7 +176,7 @@ public final class MainActivity extends Activity {
                 int count=NativeEngine.stack(caches,width,height,mode,sky,target.file(master).getPath(),(value,stage)->runOnUiThread(()->{progress.setProgress((int)(value*1000));setStatus(stage+" "+(int)(value*100)+"%");}));
                 String old=target.master;int oldWidth=target.width,oldHeight=target.height,oldAccepted=target.accepted;target.master=master;target.width=width;target.height=height;target.accepted=count;
                 try{target.save();}catch(Exception error){target.master=old;target.width=oldWidth;target.height=oldHeight;target.accepted=oldAccepted;target.file(master).delete();throw error;}
-                if(old!=null)target.file(old).delete();runOnUiThread(()->{endOperation();setStatus("合成完成 · "+count+" 帧 · "+width+"×"+height+"\n可以继续调色或导出");schedulePreview();});
+                if(old!=null)target.file(old).delete();runOnUiThread(()->{endOperation();setStatus(formatNote+"合成完成 · "+count+" 帧 · "+width+"×"+height+"\n可以继续调色或导出");schedulePreview();});
             }catch(Exception|OutOfMemoryError error){runOnUiThread(()->{endOperation();setStatus("合成失败 · "+error.getMessage());});}
         });
     }

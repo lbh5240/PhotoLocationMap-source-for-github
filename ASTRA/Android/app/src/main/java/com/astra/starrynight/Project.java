@@ -74,5 +74,20 @@ final class Project {
         if (wheels != null && wheels.length() == 9) for (int i = 0; i < 9; i++) p.wheels[i] = wheels.getDouble(i);
         return p;
     }
+    ArrayList<Frame> selectedForStack() throws Exception {
+        ArrayList<Frame> raw = new ArrayList<>(), processed = new ArrayList<>();
+        for (Frame frame : frames) {
+            if (!frame.included) continue;
+            String suffix = frame.original.substring(frame.original.lastIndexOf('.') + 1).toLowerCase(java.util.Locale.ROOT);
+            if (java.util.Arrays.asList("nef","nrw","dng","arw","cr2","cr3","raf","orf","rw2").contains(suffix)) raw.add(frame);
+            else processed.add(frame);
+        }
+        if (!raw.isEmpty() && !processed.isEmpty()) {
+            if (raw.size() >= 2) return raw;
+            if (processed.size() >= 2) return processed;
+            throw new Exception("RAW 和 JPEG 各只有一张。若是同次曝光的一对文件，不能增加信噪比，请再选择至少一次拍摄的 NEF 或 JPEG。");
+        }
+        return raw.isEmpty() ? processed : raw;
+    }
     File file(String name) { return new File(directory, name); }
 }

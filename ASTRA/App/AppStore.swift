@@ -232,8 +232,9 @@ final class AppStore: ObservableObject {
                 requestPreview()
                 let rejected = work.frames.filter { $0.included && $0.rejection != nil }.count
                 let size = "\(work.result.width) × \(work.result.height) 像素"
-                let rejectedText = rejected > 0 ? "，跳过 \(rejected) 张配准失败的照片" : ""
-                stackNotice = StackNotice(projectID: p.id, title: "合成完成", detail: "\(work.result.acceptedFrames) 张 · \(size)\(rejectedText)。可继续调色或导出。", failed: false)
+                let rejectedText = rejected > 0 ? "，\(rejected) 张未参与（原因见照片列表）" : ""
+                let note = work.formatNote.map { $0 + "\n" } ?? ""
+                stackNotice = StackNotice(projectID: p.id, title: "合成完成", detail: "\(note)\(work.result.acceptedFrames) 张 · \(size)\(rejectedText)。可继续调色或导出。", failed: false)
             } catch {
                 if let index = projects.firstIndex(where: { $0.id == p.id }) {
                     projects[index].jobInProgress = false

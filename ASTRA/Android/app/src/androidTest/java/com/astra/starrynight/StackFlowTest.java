@@ -15,9 +15,23 @@ import java.util.concurrent.atomic.AtomicReference;
 
 @RunWith(AndroidJUnit4.class)
 public class StackFlowTest {
+    @Test public void rawAndJpegAreGroupedWithoutCountingPairsTwice() throws Exception {
+        android.content.Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();
+        Project project=new Project(context.getCacheDir());
+        for(int i=0;i<4;i++){
+            Project.Frame frame=new Project.Frame();
+            frame.original="DSC_"+(i/2)+(i%2==0?".JPG":".NEF");
+            project.frames.add(frame);
+        }
+        assertEquals(2,project.selectedForStack().size());
+        assertTrue(project.selectedForStack().get(0).original.endsWith(".NEF"));
+        project.frames.remove(3);project.frames.remove(2);
+        try { project.selectedForStack();fail("One RAW+JPEG pair must not be stacked as two exposures"); }
+        catch(Exception expected){assertTrue(expected.getMessage().contains("同次曝光"));}
+    }
     @Test public void importedImagesCreateRealCombinedPixels() throws Exception {
         android.content.Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();
-        context.getSharedPreferences("MainActivity",0).edit().putBoolean("guided",true).commit();
+        context.getSharedPreferences("MainActivity",0).edit().remove("active").putBoolean("guided",true).commit();
         ArrayList<Uri> sources=fixtures(context,false);
         try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)){
             AtomicReference<MainActivity> activity=new AtomicReference<>();

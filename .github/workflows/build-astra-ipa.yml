@@ -4,6 +4,7 @@ on:
     branches: ['codex/astra-ipa']
     paths:
       - 'ASTRA/**'
+      - '!ASTRA/Android/**'
       - '.github/workflows/build-astra-ipa.yml'
   workflow_dispatch:
 permissions:
@@ -50,6 +51,10 @@ jobs:
             ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- test 2>&1 | tee Build/stack-ui.log
           container="$(xcrun simctl get_app_container "$device" com.astra.starrynight data)"
           python3 Scripts/verify_stack_fixture.py "$container/Documents/ASTRA"
+      - name: Verify RAW and JPEG selection rules
+        run: |
+          swiftc App/Models.swift App/StackSelection.swift Tests/SelectionTests.swift -o Build/selection-tests
+          Build/selection-tests
       - name: Test core and archive arm64 device app
         run: bash Scripts/build-unsigned.sh
       - name: Validate IPA

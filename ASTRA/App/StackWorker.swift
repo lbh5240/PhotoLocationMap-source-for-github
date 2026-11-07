@@ -3,10 +3,11 @@ import Foundation
 struct StackWorkResult {
     var frames: [FrameRecord]
     var result: StackResult
+    var formatNote: String?
 }
 enum StackWorker {
     static func validateSelection(_ project: AstroProject) throws {
-        let selected = project.frames.filter(\.included)
+        let selected = try StackSelection.indices(in: project).map { project.frames[$0] }
         guard selected.count >= 2 else { throw AstroError.message("请至少选择两张照片。") }
         guard selected.count <= 512 else { throw AstroError.message("单次最多合成 512 张照片。") }
         let first = selected[0]
@@ -19,7 +20,13 @@ enum StackWorker {
         try validateSelection(project)
         let pipeline = ImagePipeline(), cfg = project.configuration
         var frames = project.frames
-        let selected = frames.indices.filter { frames[$0].included }
+        let selected = try StackSelection.indices(in: project)
+        let selectedSet = Set(selected)
+        let grouped = frames.indices.filter { frames[$0].included && !selectedSet.contains($0) }
+        let formatNote = grouped.isEmpty ? nil : StackSelection.isRaw(frames[selected[0]])
+            ? "JPEG+RAW 已分组，本次优先使用 RAW，\(grouped.count) 张 JPEG 未参与。"
+            : "本次使用 JPEG 图片组，单张 RAW 未参与。"
+        for index in grouped { frames[index].rejection = formatNote }
         let w = frames[selected[0]].width, h = frames[selected[0]].height
         let cache = repository.url(project, "Cache")
         try FileManager.default.createDirectory(at: cache, withIntermediateDirectories: true)
@@ -81,6 +88,6 @@ enum StackWorker {
             if token.isCancelled() { throw CancellationError() }
             throw AstroError.message(error)
         }
-        return StackWorkResult(frames: frames, result: StackResult(fileName: fileName, width: w, height: h, acceptedFrames: accepted.count, mode: cfg.mode))
+        return StackWorkResult(frames: frames, result: StackResult(fileName: fileName, width: w, height: h, acceptedFrames: accepted.count, mode: cfg.mode), formatNote: formatNote)
     }
 }
