@@ -18,6 +18,26 @@ struct HSLBand: Codable, Equatable, Sendable {
     var saturation: Double = 0
     var luminance: Double = 0
 }
+enum GradeRange: Int, CaseIterable, Identifiable {
+    case shadows, midtones, highlights
+    var id: Int { rawValue }
+    var title: String { ["阴影", "中间调", "高光"][rawValue] }
+}
+struct WheelGrade: Codable, Equatable, Sendable {
+    var x = 0.0
+    var y = 0.0
+    var lightness = 0.0
+}
+struct ColorGrading: Codable, Equatable, Sendable {
+    var shadows = WheelGrade()
+    var midtones = WheelGrade()
+    var highlights = WheelGrade()
+
+    subscript(_ range: GradeRange) -> WheelGrade {
+        get { switch range { case .shadows: shadows; case .midtones: midtones; case .highlights: highlights } }
+        set { switch range { case .shadows: shadows = newValue; case .midtones: midtones = newValue; case .highlights: highlights = newValue } }
+    }
+}
 struct Adjustments: Codable, Equatable, Sendable {
     var exposure: Double = 0
     var contrast: Double = 1
@@ -34,6 +54,8 @@ struct Adjustments: Codable, Equatable, Sendable {
     var curveMid: Double = 0.5
     var curveHigh: Double = 0.75
     var hsl: [HSLBand] = Array(repeating: HSLBand(), count: 6)
+    // Optional for projects and undo histories saved before color grading.
+    var colorGrading: ColorGrading?
     static let neutral = Adjustments()
 }
 struct FrameRecord: Identifiable, Codable, Sendable {

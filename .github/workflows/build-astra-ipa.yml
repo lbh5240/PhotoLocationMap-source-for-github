@@ -28,6 +28,28 @@ jobs:
           xcodebuild -version
           mkdir -p Build
           xcodebuild -project ASTRA.xcodeproj -scheme ASTRA -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath Build/Simulator CODE_SIGNING_ALLOWED=NO build 2>&1 | tee Build/simulator-build.log
+      - name: Test imported photos and the stack button on iOS 27
+        timeout-minutes: 10
+        run: |
+          set -o pipefail
+          device="$(xcrun simctl list devices available --json | python3 -c '
+          import json, sys
+          devices = json.load(sys.stdin)["devices"]
+          iphones = [d for runtime, items in devices.items() if "iOS-27" in runtime
+                     for d in items if d["name"].startswith("iPhone")]
+          if not iphones:
+              sys.exit("An iOS 27 iPhone simulator is required")
+          print(iphones[0]["udid"])
+          ')"
+          xcrun simctl boot "$device"
+          xcrun simctl bootstatus "$device" -b
+          xcodebuild -project ASTRA.xcodeproj -scheme ASTRA -configuration Debug \
+            -destination "platform=iOS Simulator,id=$device" -destination-timeout 180 \
+            -derivedDataPath Build/Simulator -parallel-testing-enabled NO \
+            -resultBundlePath Build/StackTests.xcresult \
+            ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- test 2>&1 | tee Build/stack-ui.log
+          container="$(xcrun simctl get_app_container "$device" com.astra.starrynight data)"
+          python3 Scripts/verify_stack_fixture.py "$container/Documents/ASTRA"
       - name: Test core and archive arm64 device app
         run: bash Scripts/build-unsigned.sh
       - name: Validate IPA
@@ -50,31 +72,4 @@ jobs:
         with:
           name: ASTRA-build-logs
           path: ASTRA/Build/*.log
-          if-no-files-found: ignore
-      - name: Capture first launch on a clean iOS simulator
-        continue-on-error: true
-        timeout-minutes: 5
-        run: |
-          device="$(xcrun simctl list devices available --json | python3 -c '
-          import json, sys
-          devices = json.load(sys.stdin)["devices"]
-          iphones = [d for runtime, items in devices.items() if "iOS-27" in runtime
-                     for d in items if d["name"].startswith("iPhone")]
-          if not iphones:
-              sys.exit("An iOS 27 iPhone simulator is required")
-          print(iphones[0]["udid"])
-          ')"
-          xcrun simctl boot "$device"
-          xcrun simctl bootstatus "$device" -b
-          app=Build/Simulator/Build/Products/Debug-iphonesimulator/ASTRA.app
-          codesign --force --sign - "$app"
-          xcrun simctl install "$device" "$app"
-          xcrun simctl launch "$device" com.astra.starrynight
-          sleep 4
-          xcrun simctl io "$device" screenshot Build/first-launch.png
-      - name: Upload first launch evidence
-        uses: actions/upload-artifact@v4
-        with:
-          name: ASTRA-first-launch
-          path: ASTRA/Build/first-launch.png
           if-no-files-found: ignore

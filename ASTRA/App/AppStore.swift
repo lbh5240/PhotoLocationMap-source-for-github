@@ -3,6 +3,13 @@ import UIKit
 import CoreImage
 import PhotosUI
 
+struct StackNotice {
+    let projectID: UUID
+    let title: String
+    let detail: String
+    let failed: Bool
+}
+
 @MainActor
 final class AppStore: ObservableObject {
     @Published private(set) var projects: [AstroProject] = []
@@ -14,6 +21,7 @@ final class AppStore: ObservableObject {
     @Published private(set) var canCancel = false
     @Published private(set) var progress = 0.0
     @Published private(set) var status = ""
+    @Published private(set) var stackNotice: StackNotice?
     @Published var message: String?
     @Published var sharedURL: URL?
     private var repository: ProjectRepository?
@@ -186,8 +194,16 @@ final class AppStore: ObservableObject {
     }
     func startStack() {
         guard !busy, var p = project, let repo = repository else { return }
-        flushSave(); p.jobInProgress = true
-        do { try repo.save(p) } catch { message = error.localizedDescription; return }
+        stackNotice = nil
+        do {
+            try StackWorker.validateSelection(p)
+            saveTask?.cancel()
+            p.jobInProgress = true
+            try repo.save(p)
+        } catch {
+            stackNotice = StackNotice(projectID: p.id, title: "无法开始合成", detail: error.localizedDescription, failed: true)
+            return
+        }
         if let i = projects.firstIndex(where: { $0.id == p.id }) { projects[i] = p }
         busy = true; canCancel = true; progress = 0; status = "准备合成"; let token = ASCancelToken(); cancelToken = token
         let backgroundID = UIApplication.shared.beginBackgroundTask(withName: "ASTRA Stack") { token.cancel() }
@@ -198,7 +214,11 @@ final class AppStore: ObservableObject {
                     var last = Date.distantPast
                     return try StackWorker.run(project: p, repository: repo, token: token) { value, label in
                         if Date.now.timeIntervalSince(last) < 0.12 && value < 1 { return }; last = .now
-                        Task { @MainActor in self.progress = value; self.status = label }
+                        Task { @MainActor in
+                            guard self.cancelToken === token, !token.isCancelled() else { return }
+                            self.progress = value
+                            self.status = label
+                        }
                     }
                 }.value
                 guard let index = projects.firstIndex(where: { $0.id == p.id }) else { throw AstroError.message("工程已不可用") }
@@ -207,16 +227,23 @@ final class AppStore: ObservableObject {
                 committed.frames = work.frames; committed.result = work.result; committed.jobInProgress = false; committed.updated = .now
                 // Persist the new reference before removing the old master.
                 try repo.save(committed)
-                projects[index] = committed; busy = false
+                projects[index] = committed
                 if let old, old != work.result.fileName { try? FileManager.default.removeItem(at: repo.url(p, old)) }
                 requestPreview()
                 let rejected = work.frames.filter { $0.included && $0.rejection != nil }.count
-                if rejected > 0 { message = "已合成 \(work.result.acceptedFrames) 张，\(rejected) 张配准失败已跳过，可在帧列表查看原因。" }
+                let size = "\(work.result.width) × \(work.result.height) 像素"
+                let rejectedText = rejected > 0 ? "，跳过 \(rejected) 张配准失败的照片" : ""
+                stackNotice = StackNotice(projectID: p.id, title: "合成完成", detail: "\(work.result.acceptedFrames) 张 · \(size)\(rejectedText)。可继续调色或导出。", failed: false)
             } catch {
-                busy = false; update { $0.jobInProgress = false }; flushSave()
-                message = token.isCancelled() ? "合成已取消。原片、解码缓存和上次结果已保留，可重新开始。" : error.localizedDescription
+                if let index = projects.firstIndex(where: { $0.id == p.id }) {
+                    projects[index].jobInProgress = false
+                    try? repo.save(projects[index])
+                }
+                let cancelled = token.isCancelled()
+                stackNotice = StackNotice(projectID: p.id, title: cancelled ? "合成已取消" : "合成失败",
+                    detail: cancelled ? "可以重新开始。" : error.localizedDescription, failed: !cancelled)
             }
-            cancelToken = nil; canCancel = false; UIApplication.shared.isIdleTimerDisabled = false
+            cancelToken = nil; canCancel = false; busy = false; UIApplication.shared.isIdleTimerDisabled = false
             if backgroundID != .invalid { UIApplication.shared.endBackgroundTask(backgroundID) }
         }
     }

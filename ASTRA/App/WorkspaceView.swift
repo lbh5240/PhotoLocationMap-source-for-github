@@ -3,8 +3,8 @@ import PhotosUI
 import UniformTypeIdentifiers
 
 private enum ToolPanel: String, CaseIterable {
-    case stack = "堆栈", light = "光影", color = "色彩", curves = "曲线", hsl = "HSL", detail = "细节"
-    var symbol: String { switch self { case .stack: "square.3.layers.3d"; case .light: "sun.max"; case .color: "circle.lefthalf.filled"; case .curves: "point.topleft.down.to.point.bottomright.curvepath"; case .hsl: "slider.horizontal.3"; case .detail: "circle.dotted" } }
+    case stack = "堆栈", light = "光影", color = "色彩", wheels = "色轮", curves = "曲线", hsl = "HSL", detail = "细节"
+    var symbol: String { switch self { case .stack: "square.3.layers.3d"; case .light: "sun.max"; case .color: "circle.lefthalf.filled"; case .wheels: "circle.hexagongrid.fill"; case .curves: "point.topleft.down.to.point.bottomright.curvepath"; case .hsl: "slider.horizontal.3"; case .detail: "circle.dotted" } }
 }
 struct WorkspaceView: View {
     @EnvironmentObject private var store: AppStore
@@ -33,9 +33,17 @@ struct WorkspaceView: View {
                             if store.preview != nil { Text("长按比较 · 双指缩放").font(.system(size: 10)).foregroundStyle(.white.opacity(0.5)).padding(8).allowsHitTesting(false) }
                         }
                     if store.busy { progressView }
+                    if !store.busy, panel == .stack, let notice = store.stackNotice, notice.projectID == p.id {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label(notice.title, systemImage: notice.failed ? "exclamationmark.triangle" : "checkmark.circle")
+                                .font(.subheadline.weight(.semibold)).accessibilityIdentifier("stack-result-title")
+                            Text(notice.detail).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        }.foregroundStyle(notice.failed ? Color.orange : Color.mint)
+                            .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16).padding(.vertical, 10)
+                    }
                     VStack(spacing: 12) {
                         if panel != .stack { HistogramView(values: store.histogram).padding(.horizontal, 8) }
-                        ScrollView { controls(p).padding(.horizontal, 4).padding(.bottom, 8) }.frame(height: panel == .stack ? 214 : 198)
+                        ScrollView { controls(p).padding(.horizontal, 4).padding(.bottom, 8) }.frame(height: panel == .wheels ? 250 : panel == .stack ? 214 : 198)
                         toolBar
                     }.padding(16).background(Color(red: 0.045, green: 0.05, blue: 0.07))
                 }
@@ -128,6 +136,7 @@ struct WorkspaceView: View {
                 slider("自然饱和度", \.vibrance, -1...1)
             }
         case .curves: CurveControls()
+        case .wheels: ColorWheelsPanel()
         case .hsl: HSLControls()
         case .detail:
             VStack(alignment: .leading, spacing: 14) {
@@ -161,6 +170,7 @@ struct WorkspaceView: View {
                     Label("导入照片", systemImage: "plus").frame(maxWidth: .infinity).padding(.vertical, 4)
                 }.buttonStyle(.bordered)
                 Button(action: store.startStack) { Label("开始合成", systemImage: "sparkles").frame(maxWidth: .infinity).padding(.vertical, 4) }.buttonStyle(.borderedProminent).disabled(p.frames.filter(\.included).count < 2)
+                    .accessibilityIdentifier("start-stack")
             }
         }.disabled(store.busy)
     }

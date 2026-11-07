@@ -93,7 +93,10 @@ final class ImagePipeline {
         im = im.applyingFilter("CIColorControls", parameters: [kCIInputContrastKey: a.contrast, kCIInputSaturationKey: a.saturation])
         im = im.applyingFilter("CIVibrance", parameters: ["inputAmount": a.vibrance])
         im = im.applyingFilter("CIToneCurve", parameters: ["inputPoint0": CIVector(x: 0, y: a.black), "inputPoint1": CIVector(x: 0.25, y: a.curveLow), "inputPoint2": CIVector(x: 0.5, y: a.curveMid), "inputPoint3": CIVector(x: 0.75, y: a.curveHigh), "inputPoint4": CIVector(x: 1, y: 1)])
-        if a.hsl.contains(where: { $0 != HSLBand() }) { im = im.applyingFilter("CIColorCubeWithColorSpace", parameters: ["inputCubeDimension": 24, "inputCubeData": colorCube(a.hsl), "inputColorSpace": display]) }
+        if a.hsl.contains(where: { $0 != HSLBand() }) || (a.colorGrading ?? ColorGrading()) != ColorGrading() {
+            im = im.applyingFilter("CIColorCubeWithColorSpace", parameters: ["inputCubeDimension": 24,
+                "inputCubeData": colorCube(a.hsl, grading: a.colorGrading), "inputColorSpace": display])
+        }
         if a.sharpness > 0 { im = im.clampedToExtent().applyingFilter("CISharpenLuminance", parameters: [kCIInputSharpnessKey: a.sharpness]).cropped(to: extent) }
         return im.cropped(to: extent)
     }
@@ -113,8 +116,20 @@ final class ImagePipeline {
         case .heif: try context.writeHEIFRepresentation(of: im, to: url, format: .RGBA8, colorSpace: display, options: [CIImageRepresentationOption(rawValue: kCGImageDestinationLossyCompressionQuality as String): 0.95])
         }
     }
-    private func colorCube(_ bands: [HSLBand]) -> Data {
+    private func colorCube(_ bands: [HSLBand], grading: ColorGrading?) -> Data {
         let dim = 24; var cube = [Float](); cube.reserveCapacity(dim * dim * dim * 4)
+        let shifts = GradeRange.allCases.map { range -> [Double] in
+            let wheel = grading?[range] ?? WheelGrade()
+            let red = wheel.x
+            let green = -0.5 * wheel.x + 0.8660254 * wheel.y
+            let blue = -0.5 * wheel.x - 0.8660254 * wheel.y
+            let luma = 0.2126 * red + 0.7152 * green + 0.0722 * blue
+            return [red, green, blue].map { ($0 - luma) * 0.18 + wheel.lightness * 0.18 }
+        }
+        func smooth(_ low: Double, _ high: Double, _ value: Double) -> Double {
+            let t = min(1, max(0, (value - low) / (high - low)))
+            return t * t * (3 - 2 * t)
+        }
         for b in 0..<dim { for g in 0..<dim { for r in 0..<dim {
             let rgb = [Double(r), Double(g), Double(b)].map { $0 / Double(dim - 1) }
             let hi = rgb.max()!, lo = rgb.min()!, d = hi - lo, l = (hi + lo) * 0.5
@@ -126,7 +141,16 @@ final class ImagePipeline {
             let hh = (h + dh + 1).truncatingRemainder(dividingBy: 1), ss = min(1, max(0, saturation * (1 + ds))), ll = min(1, max(0, l + dl * saturation * 0.25))
             let c = (1 - abs(2 * ll - 1)) * ss, x = c * (1 - abs((hh * 6).truncatingRemainder(dividingBy: 2) - 1)), m = ll - c * 0.5
             let part = min(5, Int(hh * 6)), triplets = [[c,x,0],[x,c,0],[0,c,x],[0,x,c],[x,0,c],[c,0,x]]
-            cube.append(contentsOf: triplets[part].map { Float($0 + m) }); cube.append(1)
+            let color = triplets[part].map { $0 + m }
+            let luma = 0.2126 * color[0] + 0.7152 * color[1] + 0.0722 * color[2]
+            let shadow = 1 - smooth(0.08, 0.56, luma)
+            let highlight = smooth(0.44, 0.94, luma)
+            let midtone = max(0, 1 - shadow - highlight)
+            for channel in 0..<3 {
+                let shift = shadow * shifts[0][channel] + midtone * shifts[1][channel] + highlight * shifts[2][channel]
+                cube.append(Float(min(1, max(0, color[channel] + shift))))
+            }
+            cube.append(1)
         } } }
         return cube.withUnsafeBytes { Data($0) }
     }

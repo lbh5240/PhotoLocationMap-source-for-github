@@ -44,6 +44,16 @@ struct RootView: View {
                 NavigationStack { OnboardingView(firstLaunch: true) }
             }
             .task {
+                #if DEBUG && targetEnvironment(simulator)
+                if let variant = ProcessInfo.processInfo.environment["ASTRA_UI_STACK_FIXTURE"], store.project == nil {
+                    do {
+                        let files = try SimulatorStackFixture.make(variant: variant)
+                        store.create()
+                        store.importFiles(files)
+                    } catch { store.message = error.localizedDescription }
+                    return
+                }
+                #endif
                 if !hasSeenOnboarding && store.message == nil { showOnboarding = true }
             }
             .alert("ASTRA", isPresented: Binding(get: { store.message != nil }, set: { if !$0 { store.message = nil } })) { Button("好", role: .cancel) { store.message = nil } } message: { Text(store.message ?? "") }
