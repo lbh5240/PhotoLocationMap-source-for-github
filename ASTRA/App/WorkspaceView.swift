@@ -39,7 +39,7 @@ struct WorkspaceView: View {
                         if !store.busy, panel == .stack, let notice = store.stackNotice, notice.projectID == project.id {
                             resultNotice(notice)
                         }
-                        inspector(project).frame(height: panelHeight)
+                        inspector(project).frame(height: panelHeight + (panel == .wheels ? 18 : 0))
                         toolBar
                     }
                 }
@@ -93,7 +93,8 @@ struct WorkspaceView: View {
     private func info(_ p: AstroProject) -> String {
         if let r = p.result { return "\(r.width) × \(r.height) · Float32" }
         guard let f = p.frames.first else { return "等待导入" }
-        return "\(f.camera) · \(String(format: "%.1f", Double(f.width*f.height)/1_000_000)) MP"
+        let resolution = String(format: "%.1f MP", Double(f.width*f.height)/1_000_000)
+        return f.camera.isEmpty ? resolution : "\(f.camera) · \(resolution)"
     }
     private var progressView: some View {
         VStack(spacing: 8) {
@@ -150,12 +151,12 @@ struct WorkspaceView: View {
                     Button("\(project.frames.filter(\.included).count) 张已选") { showFrames = true }
                         .font(.caption2.monospacedDigit()).foregroundStyle(EditorStyle.accent).disabled(store.busy)
                 } else if !store.histogram.isEmpty && panel != .curves {
-                    HistogramView(values: store.histogram).frame(width: 80, height: 22)
+                    HistogramView(values: store.histogram, height: 22).frame(width: 80)
                 }
             }.padding(.horizontal, 3).frame(minHeight: 24)
             ScrollView {
                 controls(project).padding(.horizontal, 2).padding(.vertical, 1).disabled(store.busy)
-            }.scrollIndicators(.hidden).id(panel)
+            }.id(panel)
             if panel == .stack { stackActions(project) }
         }
         .padding(10)

@@ -29,13 +29,14 @@ struct Badge: View {
 }
 struct HistogramView: View {
     var values: [Double]
+    var height: CGFloat = 42
     var body: some View {
         Canvas { ctx, size in
             guard values.count > 1 else { return }; var path = Path(); path.move(to: CGPoint(x: 0, y: size.height))
             for (i, y) in values.enumerated() { path.addLine(to: CGPoint(x: CGFloat(i) / CGFloat(values.count-1) * size.width, y: size.height * (1-y))) }
             path.addLine(to: CGPoint(x: size.width, y: size.height)); path.closeSubpath()
             ctx.fill(path, with: .linearGradient(Gradient(colors: [.white.opacity(0.55), .indigo.opacity(0.1)]), startPoint: .zero, endPoint: CGPoint(x: 0, y: size.height)))
-        }.frame(height: 42).accessibilityLabel("亮度直方图")
+        }.frame(height: height).accessibilityLabel("亮度直方图")
     }
 }
 struct PhotoCanvas: View {
