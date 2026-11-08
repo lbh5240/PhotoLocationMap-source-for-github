@@ -82,7 +82,7 @@ final class StackFlowTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["ruler-value"].exists)
         XCTAssertTrue(app.buttons["reset-adjustments"].exists)
         app.buttons["reset-adjustments"].tap()
-        XCTAssertEqual(app.staticTexts["ruler-value"].label, "0.0")
+        XCTAssertEqual(app.staticTexts.matching(identifier: "ruler-value").firstMatch.label, "0.0")
         XCTAssertFalse(app.alerts["ASTRA"].exists, "星云处理内核必须实际运行")
         XCTAssertTrue(app.buttons["导出照片"].isEnabled)
         app.buttons["导出照片"].tap()
