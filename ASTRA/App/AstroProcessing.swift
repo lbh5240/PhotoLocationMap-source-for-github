@@ -53,7 +53,11 @@ enum AstroProcessing {
     static func screenStretch(_ image: CIImage, profile: AstroProfile, adjustments: Adjustments = .neutral) throws -> CIImage {
         let black = Float(adjustments.autoBlack ?? Double(profile.black))
         let white = Float(adjustments.autoWhite ?? Double(profile.white))
-        guard let result = try stfKernel.get().apply(extent: image.extent, arguments: [image, black, max(white, black + 0.005)]) else {
+        let red = Float(adjustments.autoBlackRed ?? Double(black))
+        let green = Float(adjustments.autoBlackGreen ?? Double(black))
+        let blue = Float(adjustments.autoBlackBlue ?? Double(black))
+        guard let result = try stfKernel.get().apply(extent: image.extent,
+            arguments: [image, red, green, blue, max(white, black + 0.005)]) else {
             throw AstroError.message("STF 预览渲染失败，请重试")
         }
         return result

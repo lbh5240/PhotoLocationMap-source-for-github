@@ -81,7 +81,12 @@ private actor PreviewWorker {
         let url = repository.url(project, project.result?.fileName ?? project.frames.first(where: { $0.id == project.configuration.referenceFrameID })?.fileName ?? project.frames[0].fileName)
         if proxy == nil || key != url { _ = try render(project: project, repository: repository) }
         guard let proxy else { throw AstroError.message("无法分析预览图") }
-        return try AutoDevelop.suggest((pipeline ?? ImagePipeline()).proxy(proxy, maxSide: 256))
+        let pipeline = self.pipeline ?? ImagePipeline()
+        var adjustments = try AutoDevelop.suggest(pipeline.proxy(proxy, maxSide: 256))
+        let profile = astroProfile ?? pipeline.astroProfile(proxy)
+        let corrected = try pipeline.edit(proxy, adjustments, profile: profile)
+        try AutoDevelop.calibrateSTF(&adjustments, sample: pipeline.proxy(corrected, maxSide: 256))
+        return adjustments
     }
 
     func reset() {

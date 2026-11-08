@@ -40,10 +40,13 @@ using namespace metal;
     return float4(color, source.a);
 }
 
-[[stitchable]] float4 astroSTF(coreimage::sample_t source, float black, float white) {
-    float3 rgb = max(source.rgb - float3(black), float3(0.0));
+[[stitchable]] float4 astroSTF(coreimage::sample_t source, float blackR, float blackG,
+                              float blackB, float white) {
+    float3 black = float3(blackR, blackG, blackB);
+    float3 rgb = max(source.rgb - black, float3(0.0));
     float l = dot(rgb, float3(0.2126, 0.7152, 0.0722));
-    float u = asinh(8.0 * l / max(white - black, 0.00001)) / asinh(8.0);
+    float sky = dot(black, float3(0.2126, 0.7152, 0.0722));
+    float u = asinh(8.0 * l / max(white - sky, 0.00001)) / asinh(8.0);
     // Continuous shoulder, no hard highlight clipping for bright M42 cores.
     float mapped = 1.0 - exp(-1.7 * u);
     return float4(rgb * (mapped / max(l, 0.000001)), source.a);

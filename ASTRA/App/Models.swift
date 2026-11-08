@@ -82,6 +82,9 @@ struct Adjustments: Codable, Equatable, Sendable {
     // Image-measured stretch bounds for automatic development. Nil uses the live profile.
     var autoBlack: Double?
     var autoWhite: Double?
+    var autoBlackRed: Double?
+    var autoBlackGreen: Double?
+    var autoBlackBlue: Double?
     static let neutral = Adjustments()
 }
 struct FrameRecord: Identifiable, Codable, Sendable {

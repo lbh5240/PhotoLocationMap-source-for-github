@@ -12,6 +12,8 @@ if [[ "${task_sdk_version%%.*}" -lt 26 ]]; then
 fi
 mkdir -p Build
 bash Scripts/test_core.sh 2>&1 | tee Build/core-tests.log
+swiftc App/Models.swift App/AutoDevelop.swift Tests/AutoDevelopTests.swift -o Build/auto-develop-tests
+Build/auto-develop-tests
 xcodebuild -project ASTRA.xcodeproj -scheme ASTRA -configuration Release \
   -destination 'generic/platform=iOS' -archivePath "$PWD/Build/ASTRA.xcarchive" \
   CODE_SIGNING_ALLOWED=NO archive 2>&1 | tee Build/device-build.log

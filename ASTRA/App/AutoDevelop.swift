@@ -32,7 +32,7 @@ enum AutoDevelop {
             sorted[min(sorted.count-1, max(0, Int(Double(sorted.count-1)*q)))]
         }
         let p10 = quantile(lights, 0.10), p50 = quantile(lights, 0.50)
-        let p99 = quantile(lights, 0.99), p995 = quantile(lights, 0.995)
+        let p99 = quantile(lights, 0.99)
         let skyCut = quantile(lights, 0.30)
         var sky = [0.0,0.0,0.0], skyCount = 0.0
         for v in skyPixels where v.0 <= skyCut {
@@ -48,24 +48,60 @@ enum AutoDevelop {
         }.sorted()
         let variation = cellSky.count >= 8 ?
             (quantile(cellSky, 0.75)-quantile(cellSky, 0.25))/max(p99-p10, 0.02) : 0
-        let spread = max(0.005, p995-p10)
         var a = Adjustments()
         a.autoSTF = true
-        // Dark sky and highlight bounds are measured independently for each stack.
-        a.autoBlack = max(0, min(p10, p50*0.75))
-        a.autoWhite = max((a.autoBlack ?? 0)+0.015, p995 + spread*0.14)
+        // STF bounds are calibrated *after* background/color processing below.
         a.arcsinh = 0 // the adaptive STF performs the stretch once, avoiding doubled curves
         a.maskedStretch = 0
-        a.gradientRemoval = min(0.28, max(0, variation-0.05)*0.65)
-        a.backgroundNeutralization = min(0.55, max(0.12, abs(sky[0]-sky[2])/max(0.015,neutralSky)*0.35))
+        a.gradientRemoval = min(0.55, max(0.22, variation*1.2))
+        a.backgroundNeutralization = min(0.7, max(0.2, abs(sky[0]-sky[2])/max(0.015,neutralSky)*0.6))
         a.greenSuppression = min(0.4, max(0,greenExcess-0.05)*0.55)
         a.nebulaContrast = min(0.5, max(0.22, 0.42 - 0.04*log10(max(1,p99/max(p50,0.002)))))
         a.nebulaStructure = 0.14
         a.starProtection = 0.9
         a.starReduction = 0.08
         a.starSaturation = 0.12
-        a.vibrance = 0.12
-        a.saturation = 1.12
+        a.noise = 0.12
+        a.vibrance = 0.08
+        a.saturation = 1.08
         return a
+    }
+
+    static func calibrateSTF(_ a: inout Adjustments,
+                             sample: (data: Data, width: Int, height: Int, scale: Double)) throws {
+        let w = sample.width, h = sample.height
+        var pixels: [(Double, Double, Double, Double)] = []
+        sample.data.withUnsafeBytes { raw in
+            let v = raw.bindMemory(to: Float.self)
+            for y in stride(from: 0, to: h, by: 2) {
+                for x in stride(from: 0, to: w, by: 2) {
+                    let i = (y*w+x)*4
+                    guard v[i+3] > 0.8 else { continue }
+                    let r = Double(v[i]), g = Double(v[i+1]), b = Double(v[i+2])
+                    guard r.isFinite, g.isFinite, b.isFinite else { continue }
+                    pixels.append((0.2126*r+0.7152*g+0.0722*b, r, g, b))
+                }
+            }
+        }
+        guard pixels.count >= 256 else { throw AstroError.message("有效背景区域不足，无法设定黑场") }
+        pixels.sort { $0.0 < $1.0 }
+        let n = pixels.count
+        let skyPixels = pixels[(n*40/100)..<(n*70/100)]
+        func median(_ channel: Int) -> Double {
+            let values = skyPixels.map { v in
+                channel == 0 ? v.1 : (channel == 1 ? v.2 : v.3)
+            }.sorted()
+            return values[values.count/2]
+        }
+        // Work on the processed linear pixels: the old global 10th percentile
+        // selected vignetted corners and made the whole cyan sky almost white.
+        let r = max(0, median(0)*0.985)
+        let g = max(0, median(1)*0.985)
+        let b = max(0, median(2)*0.985)
+        a.autoBlackRed = r; a.autoBlackGreen = g; a.autoBlackBlue = b
+        let sky = 0.2126*r+0.7152*g+0.0722*b
+        a.autoBlack = sky
+        let bright = pixels[min(n-1, n*985/1000)].0
+        a.autoWhite = max(sky+0.015, bright)
     }
 }
