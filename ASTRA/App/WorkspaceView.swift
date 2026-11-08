@@ -238,11 +238,11 @@ struct WorkspaceView: View {
             ], checkpoint: store.checkpoint).id(ToolPanel.light)
         case .color:
             VStack(spacing: 8) {
-                HStack(spacing: 5) {
-                    ForEach(Array(["自然银河", "冷调暗夜", "暗部提亮"].enumerated()), id: \.offset) { index, name in
-                        Button(name) { store.preset(index) }.font(.caption2.weight(.medium)).buttonStyle(.bordered)
-                    }
-                }
+                Button { store.autoDevelop() } label: {
+                    Label("智能显影 · 分析当前照片", systemImage: "sparkles.rectangle.stack")
+                        .font(.caption.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 36)
+                }.buttonStyle(.borderedProminent).tint(EditorStyle.accent)
+                    .accessibilityIdentifier("auto-develop")
                 ParameterInspector(parameters: [
                     parameter("冷暖", "thermometer.medium", \.warmth, -100...100, step: 1, precision: 0),
                     parameter("色调", "drop", \.tint, -100...100, step: 1, precision: 0),
@@ -263,12 +263,14 @@ struct WorkspaceView: View {
             }
         case .astro:
             VStack(alignment: .leading, spacing: 8) {
-                Button { store.enhanceNebula() } label: {
-                    Label("一键增强星云 · 保留亮核", systemImage: "sparkles")
+                Button { store.autoDevelop() } label: {
+                    Label("智能显影 · 保留亮核与云气", systemImage: "sparkles")
                         .font(.caption.weight(.semibold)).foregroundStyle(EditorStyle.accent)
                         .frame(maxWidth: .infinity, minHeight: 35)
                         .background(EditorStyle.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 11))
-                }.buttonStyle(.plain).accessibilityIdentifier("astro-quick-enhance")
+                }.buttonStyle(.plain).accessibilityIdentifier("auto-develop")
+                Text("分析每张照片的亮度、背景和偏色后计算参数；下方仍可逐项微调。")
+                    .font(.caption2).foregroundStyle(.secondary)
                 Toggle("自动 STF 预览与成片", isOn: Binding(get: { p.adjustments.autoSTF ?? true }, set: { value in
                     store.update({ $0.adjustments.autoSTF = value }, render: true)
                 })).font(.caption.weight(.semibold)).tint(EditorStyle.accent)

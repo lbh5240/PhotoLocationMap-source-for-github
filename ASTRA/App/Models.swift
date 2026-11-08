@@ -79,6 +79,9 @@ struct Adjustments: Codable, Equatable, Sendable {
     var starReduction: Double?
     var nebulaStructure: Double?
     var starSaturation: Double?
+    // Image-measured stretch bounds for automatic development. Nil uses the live profile.
+    var autoBlack: Double?
+    var autoWhite: Double?
     static let neutral = Adjustments()
 }
 struct FrameRecord: Identifiable, Codable, Sendable {

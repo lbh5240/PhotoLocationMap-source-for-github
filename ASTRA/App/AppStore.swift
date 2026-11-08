@@ -77,6 +77,13 @@ private actor PreviewWorker {
         }
     }
 
+    func suggest(project: AstroProject, repository: ProjectRepository) throws -> Adjustments {
+        let url = repository.url(project, project.result?.fileName ?? project.frames.first(where: { $0.id == project.configuration.referenceFrameID })?.fileName ?? project.frames[0].fileName)
+        if proxy == nil || key != url { _ = try render(project: project, repository: repository) }
+        guard let proxy else { throw AstroError.message("无法分析预览图") }
+        return try AutoDevelop.suggest((pipeline ?? ImagePipeline()).proxy(proxy, maxSide: 256))
+    }
+
     func reset() {
         key = nil
         proxy = nil
@@ -137,30 +144,23 @@ final class AppStore: ObservableObject {
     func undo() { update({ p in guard let prev = p.undo.popLast() else { return }; p.redo.append(p.adjustments); p.adjustments = prev }, render: true) }
     func redo() { update({ p in guard let next = p.redo.popLast() else { return }; p.undo.append(p.adjustments); p.adjustments = next }, render: true) }
     func reset() { checkpoint(); update({ $0.adjustments = .neutral }, render: true) }
-    func preset(_ index: Int) {
-        checkpoint(); update({ p in
-            var a = Adjustments()
-            switch index {
-            case 0: a.exposure = 0.5; a.vibrance = 0.2; a.curveLow = 0.19; a.curveHigh = 0.82
-            case 1: a.exposure = 0.3; a.warmth = -20; a.saturation = 0.9; a.curveLow = 0.18
-            case 2: a.exposure = 1.0; a.shadows = 0.25; a.vibrance = 0.3; a.noise = 0.2
-            default: break
-            }; p.adjustments = a
-        }, render: true)
-    }
-    func enhanceNebula() {
-        checkpoint()
-        update({ p in
-            p.adjustments.arcsinh = 18
-            p.adjustments.maskedStretch = 0.55
-            p.adjustments.gradientRemoval = 0.4
-            p.adjustments.nebulaContrast = 0.55
-            p.adjustments.starProtection = 0.85
-            p.adjustments.backgroundNeutralization = 0.25
-            p.adjustments.starReduction = 0.25
-            p.adjustments.nebulaStructure = 0.2
-            p.adjustments.starSaturation = 0.2
-        }, render: true)
+    func autoDevelop() {
+        guard !busy, let p = project, !p.frames.isEmpty, let repo = repository else { return }
+        busy = true; status = "分析星空亮度与背景"; progress = 0
+        Task {
+            do {
+                let suggested = try await previewWorker.suggest(project: p, repository: repo)
+                guard selectedID == p.id else { busy = false; return }
+                busy = false; status = ""; progress = 1
+                checkpoint()
+                update({ $0.adjustments = suggested }, render: true)
+                if p.result == nil && StackSelection.rawExtensions.contains(p.frames[0].fileName.lowercased().components(separatedBy: ".").last ?? "") {
+                    message = "已按 NEF 内嵌预览自动显影；堆栈后再次使用可按线性数据精确分析。"
+                }
+            } catch {
+                busy = false; status = ""; message = error.localizedDescription
+            }
+        }
     }
     func flushSave() {
         saveTask?.cancel()

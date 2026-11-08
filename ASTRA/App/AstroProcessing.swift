@@ -50,8 +50,10 @@ enum AstroProcessing {
         return result
     }
 
-    static func screenStretch(_ image: CIImage, profile: AstroProfile) throws -> CIImage {
-        guard let result = try stfKernel.get().apply(extent: image.extent, arguments: [image, profile.black, profile.white]) else {
+    static func screenStretch(_ image: CIImage, profile: AstroProfile, adjustments: Adjustments = .neutral) throws -> CIImage {
+        let black = Float(adjustments.autoBlack ?? Double(profile.black))
+        let white = Float(adjustments.autoWhite ?? Double(profile.white))
+        guard let result = try stfKernel.get().apply(extent: image.extent, arguments: [image, black, max(white, black + 0.005)]) else {
             throw AstroError.message("STF 预览渲染失败，请重试")
         }
         return result
@@ -83,19 +85,28 @@ enum AstroProcessing {
         light.sort()
         let black = light.isEmpty ? 0 : light[min(light.count-1, light.count/100)]
         let white = light.isEmpty ? 1 : light[min(light.count-1, light.count*995/1000)]
+        let levels = cells.map { 0.2126*$0[0] + 0.7152*$0[1] + 0.0722*$0[2] }.sorted()
+        let floor = max(0.005, levels[levels.count / 3])
         var grid = [Float](repeating: 1, count: gw*gh*4)
         for y in 0..<gh { for x in 0..<gw { for c in 0..<3 {
-            var local = Float.greatestFiniteMagnitude
-            for dy in -1...1 { for dx in -1...1 {
+            var sum: Float = 0, total: Float = 0
+            for dy in -2...2 { for dx in -2...2 {
                 let nx = min(gw-1,max(0,x+dx)),ny = min(gh-1,max(0,y+dy))
-                local = min(local,cells[ny*gw+nx][c])
+                let v = cells[ny*gw+nx]
+                let l = 0.2126*v[0] + 0.7152*v[1] + 0.0722*v[2]
+                let excess = max(0, l - floor) / floor
+                let distance = Float(dx*dx + dy*dy)
+                let weight = exp(-distance * 0.38) / (1 + excess * 5)
+                sum += v[c] * weight; total += weight
             } }
-            grid[(y*gw+x)*4+c] = local.isFinite ? local : 0
+            grid[(y*gw+x)*4+c] = total > 0 ? sum / total : 0
         } } }
         let bytes = grid.withUnsafeBytes { Data($0) }
         var background = CIImage(bitmapData: bytes, bytesPerRow: gw*16,
                                  size: CGSize(width: gw,height: gh), format: .RGBAf, colorSpace: linear)
         if bitmapRowsTopFirst { background = background.oriented(.downMirrored) }
+        background = background.clampedToExtent().applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 0.9])
+            .cropped(to: CGRect(x: 0, y: 0, width: gw, height: gh))
         return AstroProfile(background: background, black: max(0,black), white: max(white,black+0.005))
     }
 }

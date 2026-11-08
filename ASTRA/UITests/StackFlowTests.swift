@@ -51,10 +51,10 @@ final class StackFlowTests: XCTestCase {
         app.descendants(matching: .any)["editor-dock"].firstMatch.swipeLeft()
         app.buttons["editor-tool-astro"].tap()
         XCTAssertTrue(app.switches["auto-stf-toggle"].exists)
-        XCTAssertTrue(app.buttons["astro-quick-enhance"].exists)
-        app.buttons["astro-quick-enhance"].tap()
+        XCTAssertTrue(app.buttons["auto-develop"].exists)
+        app.buttons["auto-develop"].tap()
         var changed = false
-        for _ in 0..<12 {
+        for _ in 0..<24 {
             if canvas.screenshot().image.pngData() != neutralImage { changed = true; break }
             Thread.sleep(forTimeInterval: 0.25)
         }
