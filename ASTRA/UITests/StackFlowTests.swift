@@ -28,6 +28,27 @@ final class StackFlowTests: XCTestCase {
     }
 
     @MainActor
+    func testSubjectFrameKeepsAspectWhileMovingAndScaling() {
+        let app = launch(with: "good")
+        app.buttons["select-reference-region"].tap()
+        let canvas = app.descendants(matching: .any)["reference-selector-canvas"].firstMatch
+        XCTAssertTrue(canvas.waitForExistence(timeout: 10))
+        app.buttons["region-aspect-1:1"].tap()
+        let region = app.descendants(matching: .any)["reference-region"].firstMatch
+        XCTAssertTrue(region.waitForExistence(timeout: 5))
+        XCTAssertEqual(region.frame.width, region.frame.height, accuracy: 2)
+        let initialCenter = region.frame.midX
+        canvas.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            .press(forDuration: 0.08, thenDragTo: canvas.coordinate(withNormalizedOffset: CGVector(dx: 0.6, dy: 0.55)))
+        XCTAssertGreaterThan(region.frame.midX, initialCenter)
+        XCTAssertEqual(region.frame.width, region.frame.height, accuracy: 2)
+        let initialWidth = region.frame.width
+        app.sliders["region-size-slider"].adjust(toNormalizedSliderPosition: 0.2)
+        XCTAssertLessThan(region.frame.width, initialWidth)
+        XCTAssertEqual(region.frame.width, region.frame.height, accuracy: 2)
+    }
+
+    @MainActor
     func testDifferentExposuresKeepMatching() {
         let app = launch(with: "exposure")
         app.buttons["start-stack"].tap()

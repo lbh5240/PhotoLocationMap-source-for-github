@@ -36,7 +36,7 @@ using namespace metal;
     float starL = dot(starSignal, float3(0.2126, 0.7152, 0.0722));
     color += max(float3(starL) + (starSignal - float3(starL)) * (1.0 + starColor), float3(0.0));
     float cloud = (1.0 - star) * lowL / (lowL + 0.04);
-    color = max(color + (low - sky) * structure * 0.35 * cloud, float3(0.0));
+    color = max(color + (low - float3(0.012)) * structure * 0.2 * cloud, float3(0.0));
     return float4(color, source.a);
 }
 
@@ -58,7 +58,11 @@ using namespace metal;
         // Rational hyperbolic lift puts more emphasis on faint outer gas.
         mapped = 1.0 - exp(-2.0 * x / (x + 0.35));
     }
-    float3 output = rgb * (mapped / max(l, 0.000001));
+    // Chroma in the sky is dominated by read noise and colour differences in
+    // the background model. Fade it in continuously as genuine signal rises.
+    float chromaWeight = smoothstep(0.015, 0.24, x);
+    float3 balanced = mix(float3(l), rgb, chromaWeight);
+    float3 output = balanced * (mapped / max(l, 0.000001));
     output /= max(1.0, max(output.r, max(output.g, output.b)));
     return float4(output, source.a);
 }

@@ -195,7 +195,26 @@ final class ImagePipeline {
     // master untouched; trim only the developed view and its matching export.
     func finishedStackView(_ image: CIImage) -> CIImage {
         let e = image.extent.integral
-        let dx = max(2, floor(e.width * 0.015)), dy = max(2, floor(e.height * 0.015))
+        let sample = proxy(image, maxSide: 256)
+        var inset = 0.03
+        sample.data.withUnsafeBytes { raw in
+            let p = raw.bindMemory(to: Float.self)
+            for step in 6...24 {
+                let fraction = Double(step) * 0.005
+                let left = Int(Double(sample.width)*fraction), top = Int(Double(sample.height)*fraction)
+                let right = sample.width-left, bottom = sample.height-top
+                var covered = true
+                for y in stride(from: top, to: bottom, by: 2) {
+                    for x in stride(from: left, to: right, by: 2) {
+                        if p[(y*sample.width+x)*4+3] < 0.98 { covered = false; break }
+                    }
+                    if !covered { break }
+                }
+                if covered { inset = fraction; break }
+                inset = fraction
+            }
+        }
+        let dx = max(2, floor(e.width * inset)), dy = max(2, floor(e.height * inset))
         guard e.width > 4*dx, e.height > 4*dy else { return image }
         let region = e.insetBy(dx: dx, dy: dy).integral
         return image.cropped(to: region).transformed(by: CGAffineTransform(translationX: -region.minX, y: -region.minY))

@@ -633,8 +633,28 @@ private struct ReferenceRegionView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var image: UIImage?
     @State private var loading = false
-    @State private var dragStart: CGPoint?
-    @State private var dragEnd: CGPoint?
+    @State private var aspect: RegionAspect = .free
+    @State private var draft: StackRegion?
+    @State private var gestureBase: StackRegion?
+    @State private var moving = false
+    @State private var pinchBase: StackRegion?
+
+    private enum RegionAspect: String, CaseIterable, Identifiable {
+        case free = "自由", square = "1:1", landscape43 = "4:3", landscape32 = "3:2"
+        case wide = "16:9", portrait32 = "2:3", portrait916 = "9:16"
+        var id: String { rawValue }
+        var ratio: CGFloat? {
+            switch self {
+            case .free: nil
+            case .square: 1
+            case .landscape43: 4.0 / 3
+            case .landscape32: 3.0 / 2
+            case .wide: 16.0 / 9
+            case .portrait32: 2.0 / 3
+            case .portrait916: 9.0 / 16
+            }
+        }
+    }
 
     private var selected: FrameRecord? {
         guard let project = store.project else { return nil }
@@ -653,6 +673,7 @@ private struct ReferenceRegionView: View {
                                     $0.configuration.referenceFrameID = frame.id
                                     $0.configuration.region = nil
                                 }
+                                draft = nil
                                 image = nil
                                 load(frame)
                             }
@@ -694,26 +715,32 @@ private struct ReferenceRegionView: View {
                                 .position(x: geometry.size.width / 2, y: geometry.size.height / 2)
                                 .gesture(DragGesture(minimumDistance: 4)
                                     .onChanged { value in
-                                        dragStart = dragStart ?? value.startLocation
-                                        dragEnd = value.location
+                                        if gestureBase == nil {
+                                            gestureBase = draft ?? store.project?.configuration.region
+                                            let point = value.startLocation
+                                            moving = displayedRegion(origin: .zero, size: size, region: gestureBase)?.insetBy(dx: -8, dy: -8).contains(point) == true
+                                        }
+                                        if moving, let base = gestureBase {
+                                            draft = move(base, dx: value.translation.width / size.width,
+                                                         dy: -value.translation.height / size.height)
+                                        } else {
+                                            draft = selection(from: value.startLocation, to: value.location, size: size)
+                                        }
                                     }
                                     .onEnded { value in
-                                        let start = dragStart ?? value.startLocation
-                                        let end = value.location
-                                        dragStart = nil
-                                        dragEnd = nil
-                                        let left = max(0, min(size.width, min(start.x, end.x)))
-                                        let right = max(0, min(size.width, max(start.x, end.x)))
-                                        let top = max(0, min(size.height, min(start.y, end.y)))
-                                        let bottom = max(0, min(size.height, max(start.y, end.y)))
-                                        guard right - left >= size.width * 0.08,
-                                              bottom - top >= size.height * 0.08 else { return }
-                                        store.update {
-                                            $0.configuration.region = StackRegion(x: Double(left / size.width),
-                                                y: Double(1 - bottom / size.height),
-                                                width: Double((right - left) / size.width),
-                                                height: Double((bottom - top) / size.height))
+                                        defer { gestureBase = nil; moving = false; draft = nil }
+                                        if let result = draft, result.width >= 0.08, result.height >= 0.08 {
+                                            store.update { $0.configuration.region = result }
                                         }
+                                    })
+                                .simultaneousGesture(MagnifyGesture()
+                                    .onChanged { value in
+                                        if pinchBase == nil { pinchBase = draft ?? store.project?.configuration.region }
+                                        if let base = pinchBase { draft = resized(base, width: CGFloat(base.width) * value.magnification, size: size) }
+                                    }
+                                    .onEnded { _ in
+                                        if let draft { store.update { $0.configuration.region = draft } }
+                                        pinchBase = nil; draft = nil
                                     })
                         } else if loading {
                             ProgressView("正在载入主图…")
@@ -723,10 +750,37 @@ private struct ReferenceRegionView: View {
                     }
                 }
                 .frame(maxHeight: .infinity)
-                Text("拖动框住 M42 和周围至少 8 颗清晰星星。其他照片只需拍到相同星区，框外允许裁切和位移。")
+                if let image {
+                    let bounds = CGSize(width: image.size.width, height: image.size.height)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(RegionAspect.allCases) { option in
+                                Button(option.rawValue) {
+                                    aspect = option
+                                    let current = store.project?.configuration.region ?? StackRegion(x: 0.2, y: 0.2, width: 0.6, height: 0.6)
+                                    store.update { $0.configuration.region = resized(current, width: CGFloat(current.width), size: bounds) }
+                                }
+                                .buttonStyle(.bordered)
+                                .tint(option == aspect ? EditorStyle.accent : .secondary)
+                                .accessibilityIdentifier("region-aspect-\(option.rawValue)")
+                            }
+                        }.padding(.horizontal)
+                    }
+                    HStack {
+                        Text("框选大小")
+                        Slider(value: Binding(get: {
+                            store.project?.configuration.region?.width ?? 0.6
+                        }, set: { value in
+                            let current = store.project?.configuration.region ?? StackRegion(x: 0.2, y: 0.2, width: 0.6, height: 0.6)
+                            store.update { $0.configuration.region = resized(current, width: CGFloat(value), size: bounds) }
+                        }), in: 0.1...0.95)
+                        .accessibilityIdentifier("region-size-slider")
+                    }.padding(.horizontal)
+                }
+                Text("选定比例后拖动空白处重画，拖动框内可移动，双指或滑杆等比缩放。主体和周围至少保留 8 颗清晰星星。")
                     .font(.subheadline).foregroundStyle(.secondary).padding(.horizontal)
                 HStack {
-                    Button("使用整张主图") { store.update { $0.configuration.region = nil } }
+                    Button("使用整张主图") { draft = nil; store.update { $0.configuration.region = nil } }
                     Spacer()
                     Button("完成") { store.flushSave(); dismiss() }.buttonStyle(.borderedProminent)
                 }.padding()
@@ -739,14 +793,44 @@ private struct ReferenceRegionView: View {
     }
 
     private func displayedRegion(origin: CGPoint, size: CGSize) -> CGRect? {
-        if let start = dragStart, let end = dragEnd {
-            return CGRect(x: origin.x + min(start.x, end.x), y: origin.y + min(start.y, end.y),
-                          width: abs(end.x - start.x), height: abs(end.y - start.y))
-        }
-        guard let region = store.project?.configuration.region else { return nil }
+        displayedRegion(origin: origin, size: size, region: draft ?? store.project?.configuration.region)
+    }
+
+    private func displayedRegion(origin: CGPoint, size: CGSize, region: StackRegion?) -> CGRect? {
+        guard let region else { return nil }
         return CGRect(x: origin.x + CGFloat(region.x) * size.width,
                       y: origin.y + CGFloat(1 - region.y - region.height) * size.height,
                       width: CGFloat(region.width) * size.width, height: CGFloat(region.height) * size.height)
+    }
+
+    private func move(_ region: StackRegion, dx: CGFloat, dy: CGFloat) -> StackRegion {
+        StackRegion(x: min(1-region.width, max(0, region.x+Double(dx))),
+                    y: min(1-region.height, max(0, region.y+Double(dy))),
+                    width: region.width, height: region.height)
+    }
+
+    private func resized(_ region: StackRegion, width: CGFloat, size: CGSize) -> StackRegion {
+        let ratio = aspect.ratio ?? CGFloat(region.width) * size.width / max(0.001, CGFloat(region.height) * size.height)
+        let w = min(min(0.98, max(0.08, width)), 0.98 * ratio * size.height / size.width)
+        let h = w * size.width / size.height / ratio
+        let cx = CGFloat(region.x + region.width/2), cy = CGFloat(region.y + region.height/2)
+        return StackRegion(x: Double(min(1-w, max(0,cx-w/2))), y: Double(min(1-h,max(0,cy-h/2))),
+                           width: Double(w), height: Double(h))
+    }
+
+    private func selection(from start: CGPoint, to end: CGPoint, size: CGSize) -> StackRegion? {
+        let x = min(max(0,start.x),size.width), y = min(max(0,start.y),size.height)
+        let ex = min(max(0,end.x),size.width), ey = min(max(0,end.y),size.height)
+        var w = abs(ex-x), h = abs(ey-y)
+        if let ratio = aspect.ratio {
+            w = min(w, h*ratio)
+            h = w/ratio
+        }
+        guard w >= size.width*0.08, h >= size.height*0.08 else { return nil }
+        let left = min(max(0, (ex >= x ? x : x-w)), size.width-w)
+        let top = min(max(0, (ey >= y ? y : y-h)), size.height-h)
+        return StackRegion(x: Double(left/size.width), y: Double(1-(top+h)/size.height),
+                           width: Double(w/size.width), height: Double(h/size.height))
     }
 
     private func load(_ frame: FrameRecord) {

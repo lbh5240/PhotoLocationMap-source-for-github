@@ -6,6 +6,7 @@ struct AstroProfile {
     let background: CIImage
     let black: Float
     let white: Float
+    let blackRGB: [Float]
 }
 
 enum AstroProcessing {
@@ -53,9 +54,9 @@ enum AstroProcessing {
     static func screenStretch(_ image: CIImage, profile: AstroProfile, adjustments: Adjustments = .neutral) throws -> CIImage {
         let black = Float(adjustments.autoBlack ?? Double(profile.black))
         let white = Float(adjustments.autoWhite ?? Double(profile.white))
-        let red = Float(adjustments.autoBlackRed ?? Double(black))
-        let green = Float(adjustments.autoBlackGreen ?? Double(black))
-        let blue = Float(adjustments.autoBlackBlue ?? Double(black))
+        let red = Float(adjustments.autoBlackRed ?? Double(profile.blackRGB[0]))
+        let green = Float(adjustments.autoBlackGreen ?? Double(profile.blackRGB[1]))
+        let blue = Float(adjustments.autoBlackBlue ?? Double(profile.blackRGB[2]))
         guard let result = try stfKernel.get().apply(extent: image.extent,
             arguments: [image, red, green, blue, max(white, black + 0.005),
                         Float(adjustments.developMethod?.rawValue ?? 0)]) else {
@@ -68,7 +69,7 @@ enum AstroProcessing {
                         bitmapRowsTopFirst: Bool) -> AstroProfile {
         let gw = 12, gh = 8
         var cells = [[Float]](repeating: [0, 0, 0], count: gw * gh)
-        var light: [Float] = []
+        var light: [Float] = [], channels = [[Float]](repeating: [], count: 3)
         data.withUnsafeBytes { bytes in
             let p = bytes.bindMemory(to: Float.self)
             for gy in 0..<gh { for gx in 0..<gw {
@@ -81,6 +82,7 @@ enum AstroProcessing {
                         let l = 0.2126*rgb[0]+0.7152*rgb[1]+0.0722*rgb[2]
                         guard l.isFinite else { continue }
                         samples.append((l,rgb));light.append(l)
+                        for c in 0..<3 { channels[c].append(rgb[c]) }
                     }
                 }
                 samples.sort { $0.0 < $1.0 }
@@ -88,7 +90,14 @@ enum AstroProcessing {
             } }
         }
         light.sort()
-        let black = light.isEmpty ? 0 : light[min(light.count-1, light.count/100)]
+        // The first percentile comes from the vignetted corners. Stretching from
+        // there makes the actual sky gray and amplifies its colour noise.
+        let blackRGB: [Float] = channels.map { values in
+            guard !values.isEmpty else { return 0 }
+            let sorted = values.sorted()
+            return max(0, sorted[min(sorted.count-1, sorted.count*55/100)])
+        }
+        let black = 0.2126*blackRGB[0] + 0.7152*blackRGB[1] + 0.0722*blackRGB[2]
         let white = light.isEmpty ? 1 : light[min(light.count-1, light.count*995/1000)]
         let levels = cells.map { 0.2126*$0[0] + 0.7152*$0[1] + 0.0722*$0[2] }.sorted()
         let floor = max(0.005, levels[levels.count / 3])
@@ -112,6 +121,6 @@ enum AstroProcessing {
         if bitmapRowsTopFirst { background = background.oriented(.downMirrored) }
         background = background.clampedToExtent().applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 0.9])
             .cropped(to: CGRect(x: 0, y: 0, width: gw, height: gh))
-        return AstroProfile(background: background, black: max(0,black), white: max(white,black+0.005))
+        return AstroProfile(background: background, black: max(0,black), white: max(white,black+0.005), blackRGB: blackRGB)
     }
 }
