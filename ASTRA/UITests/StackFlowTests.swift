@@ -103,10 +103,12 @@ final class StackFlowTests: XCTestCase {
         four.tap()
         XCTAssertTrue(previewChanged(canvas, from: noSpikes), "星芒必须改变真实预览像素")
         app.buttons["关闭"].tap()
-        let removed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-            canvas.screenshot().image.pngData() == noSpikes
-        }, object: nil)
-        XCTAssertEqual(XCTWaiter.wait(for: [removed], timeout: 8), .completed)
+        var spikesRemoved = false
+        for _ in 0..<25 {
+            if canvas.screenshot().image.pngData() == noSpikes { spikesRemoved = true; break }
+            Thread.sleep(forTimeInterval: 0.2)
+        }
+        XCTAssertTrue(spikesRemoved, "关闭星芒应恢复原先的预览像素")
         let natural = canvas.screenshot().image.pngData()
         for _ in 0..<4 where !app.buttons["develop-method-1"].isHittable { inspector.swipeUp(velocity: .slow) }
         XCTAssertTrue(app.buttons["develop-method-1"].isHittable)

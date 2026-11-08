@@ -48,7 +48,11 @@ enum AstroProcessing {
         guard let seeds = try spikeSeeds.get().apply(extent: extent, arguments: [image, broad]) else {
             throw AstroError.message("星芒亮星检测失败")
         }
-        let angles: [Double] = style == .four ? [.pi / 4, 3 * .pi / 4] : [.pi / 6, .pi / 2, 5 * .pi / 6]
+        let quarterTurn = Double.pi / 4
+        let sixthTurn = Double.pi / 6
+        let angles = style == .four
+            ? [quarterTurn, 3 * quarterTurn]
+            : [sixthTurn, 3 * sixthTurn, 5 * sixthTurn]
         let radius = max(2, size * 0.013)
         let rays = angles.map { angle -> CIImage in
             let parameters: [String: Any] = [kCIInputRadiusKey: radius, kCIInputAngleKey: angle]
