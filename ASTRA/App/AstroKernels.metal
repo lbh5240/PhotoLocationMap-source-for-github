@@ -41,7 +41,7 @@ using namespace metal;
 }
 
 [[stitchable]] float4 astroSTF(coreimage::sample_t source, float blackR, float blackG,
-                              float blackB, float white, float method) {
+                              float blackB, float white, float method, float skyNoise, float midtone) {
     float3 black = float3(blackR, blackG, blackB);
     float sky = dot(black, float3(0.2126, 0.7152, 0.0722));
     float toe = max((white - sky) * 0.02, 0.0005);
@@ -56,9 +56,24 @@ using namespace metal;
     } else if (method < 1.5) {
         // Logarithmic compression retains contrast in a bright nebular core.
         mapped = 1.0 - exp(-1.1 * log(1.0 + 3.0 * x) / log(4.0));
-    } else {
+    } else if (method < 2.5) {
         // Rational hyperbolic lift puts more emphasis on faint outer gas.
         mapped = 1.0 - exp(-2.0 * x / (x + 0.35));
+    } else if (method < 3.5) {
+        // Smoothly attenuate the stretch near the measured sky-noise floor.
+        const float knee = clamp(2.5 * skyNoise / max(white - sky, 0.005), 0.015, 0.18);
+        const float signal = x * (x / (x + knee));
+        mapped = 1.0 - exp(-1.7 * asinh(8.0 * signal) / asinh(8.0));
+    } else {
+        // MTF on linked luminance with an open highlight shoulder. Solve the
+        // midtones balance to move the measured upper midtones toward 0.42.
+        const float target = 0.42;
+        const float anchorSignal = 2.0 * max(midtone, 0.0);
+        const float anchor = clamp(anchorSignal / (1.0 + anchorSignal), 0.06, 0.65);
+        const float m = clamp(anchor * (1.0 - target) /
+                              (target + anchor * (1.0 - 2.0 * target)), 0.20, 0.66);
+        const float u = 2.0 * x / (1.0 + 2.0 * x);
+        mapped = (1.0 - m) * u / (m + (1.0 - 2.0 * m) * u);
     }
     // Chroma in the sky is dominated by read noise and colour differences in
     // the background model. Fade it in continuously as genuine signal rises.

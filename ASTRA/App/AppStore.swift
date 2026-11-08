@@ -42,7 +42,7 @@ private actor PreviewWorker {
             if key != url || proxy == nil || before == nil {
                 let source: CIImage
                 if let result = project.result {
-                    source = pipeline.finishedStackView(try pipeline.master(result, repository: repository, project: project))
+                    source = pipeline.finishedStackView(try pipeline.master(result, repository: repository, project: project), result: result)
                 } else if StackSelection.rawExtensions.contains(url.pathExtension.lowercased()) {
                     let frame = project.frames.first { $0.fileName == url.lastPathComponent || repository.url(project, $0.fileName) == url }
                     let thumbnail = frame.map { repository.url(project, "Thumbs/\($0.id.uuidString).preview.jpg") }
@@ -58,17 +58,18 @@ private actor PreviewWorker {
                     source = try pipeline.decode(url)
                 }
                 let image = try pipeline.previewSource(source)
-                astroProfile = project.result == nil ? nil : pipeline.astroProfile(image)
+                astroProfile = pipeline.astroProfile(image)
                 proxy = image
                 key = url
             }
             try Task.checkCancellation()
             guard let proxy else { throw AstroError.message("预览渲染失败") }
-            let stf = project.result != nil && (project.adjustments.autoSTF ?? true)
-            if before == nil || beforeSTF != stf {
+            let stf = project.usesScreenStretch
+            let compareSTF = project.result != nil && stf
+            if before == nil || beforeSTF != compareSTF {
                 before = try pipeline.preview(image: proxy, adjustments: .neutral,
-                                              profile: astroProfile, autoSTF: stf)
-                beforeSTF = stf
+                                              profile: astroProfile, autoSTF: compareSTF)
+                beforeSTF = compareSTF
             }
             guard let before else { throw AstroError.message("预览渲染失败") }
             let after = try pipeline.preview(image: proxy, adjustments: project.adjustments,
@@ -152,7 +153,10 @@ final class AppStore: ObservableObject {
     func chooseDevelopMethod(_ method: DevelopMethod) {
         guard !busy else { return }
         checkpoint()
-        update({ $0.adjustments.developMethod = method }, render: true)
+        update({
+            $0.adjustments.developMethod = method
+            $0.adjustments.autoSTF = true
+        }, render: true)
     }
     func autoDevelop(method: DevelopMethod? = nil) {
         guard !busy, let p = project, !p.frames.isEmpty, let repo = repository else { return }
@@ -430,7 +434,7 @@ final class AppStore: ObservableObject {
                 if let old, old != work.result.fileName { try? FileManager.default.removeItem(at: repo.url(p, old)) }
                 requestPreview()
                 let rejected = work.frames.filter { $0.included && $0.rejection != nil }.count
-                let size = "\(work.result.width) × \(work.result.height) 像素"
+                let size = "\(work.result.outputWidth) × \(work.result.outputHeight) 像素"
                 let rejectedText = rejected > 0 ? "，\(rejected) 张未参与（原因见照片列表）" : ""
                 let note = work.formatNote.map { $0 + "\n" } ?? ""
                 stackNotice = StackNotice(projectID: p.id, title: "合成完成", detail: "\(note)\(work.result.acceptedFrames) 张 · \(size)\(rejectedText)。可继续调色或导出。", failed: false)
@@ -470,13 +474,13 @@ final class AppStore: ObservableObject {
                     let pipeline = ImagePipeline(), source: CIImage
                     if let result = p.result {
                         let master = try pipeline.master(result, repository: repo, project: p)
-                        source = kind == .exr ? master : pipeline.finishedStackView(master)
+                        source = pipeline.finishedStackView(master, result: result, linearExport: kind == .exr)
                     }
                     else { source = try pipeline.decode(repo.url(p, (p.frames.first(where: { $0.id == p.configuration.referenceFrameID }) ?? p.frames[0]).fileName)) }
                     let output = repo.url(p, "Exports/ASTRA-\(UUID().uuidString.prefix(8)).\(kind.ext)")
                     try FileManager.default.createDirectory(at: output.deletingLastPathComponent(), withIntermediateDirectories: true)
                     try pipeline.export(image: source, adjustments: p.adjustments, kind: kind, url: output,
-                                        screenSTF: matchPreview && p.result != nil && (p.adjustments.autoSTF ?? true))
+                                        screenSTF: matchPreview && p.usesScreenStretch)
                     return output
                 }.value
                 if destination == .photos {

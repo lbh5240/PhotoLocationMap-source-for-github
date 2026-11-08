@@ -51,13 +51,15 @@ struct ColorGrading: Codable, Equatable, Sendable {
     }
 }
 enum DevelopMethod: Int, Codable, CaseIterable, Identifiable, Sendable {
-    case natural, core, nebula
+    case natural, core, nebula, quietSky, midtones
     var id: Int { rawValue }
-    var title: String { switch self { case .natural: "自然"; case .core: "亮核"; case .nebula: "云气" } }
+    var title: String { switch self { case .natural: "自然"; case .core: "亮核"; case .nebula: "云气"; case .quietSky: "低噪暗场"; case .midtones: "中间调 MTF" } }
     var detail: String { switch self {
         case .natural: "Arcsinh 色彩保护与平滑肩部"
         case .core: "对数亮部压缩，适合 M42 高亮核心"
         case .nebula: "双曲线提升暗弱云气，注意噪声"
+        case .quietSky: "按背景噪声限制暗部增益，适合背景颗粒明显的堆栈"
+        case .midtones: "联动亮度的中间调变换，适合中间调发灰、星云层次不明显的画面"
     } }
 }
 struct Adjustments: Codable, Equatable, Sendable {
@@ -115,6 +117,37 @@ struct FrameRecord: Identifiable, Codable, Sendable {
     var rejection: String?
     var rawPreviewUnavailable: Bool?
 }
+struct StackCrop: Codable, Sendable {
+    let x: Int
+    let y: Int
+    let width: Int
+    let height: Int
+
+    init?(region: StackRegion, reference: CGRect, aspect: String?) {
+        let selected = CGRect(x: reference.minX + CGFloat(region.x) * reference.width,
+                              y: reference.minY + CGFloat(region.y) * reference.height,
+                              width: CGFloat(region.width) * reference.width,
+                              height: CGFloat(region.height) * reference.height).intersection(reference)
+        guard !selected.isNull else { return nil }
+        let left = Int(ceil(selected.minX)), bottom = Int(ceil(selected.minY))
+        let availableWidth = Int(floor(selected.maxX)) - left
+        let availableHeight = Int(floor(selected.maxY)) - bottom
+        let units = aspect?.split(separator: ":").compactMap { Int($0) } ?? []
+        if units.count == 2, units[0] > 0, units[1] > 0 {
+            let count = min(availableWidth / units[0], availableHeight / units[1])
+            width = units[0] * count
+            height = units[1] * count
+        } else {
+            width = availableWidth
+            height = availableHeight
+        }
+        guard width >= 16, height >= 16 else { return nil }
+        x = left + (availableWidth - width) / 2
+        y = bottom + (availableHeight - height) / 2
+    }
+
+    var rect: CGRect { CGRect(x: x, y: y, width: width, height: height) }
+}
 struct StackResult: Codable, Sendable {
     var fileName: String
     var width: Int
@@ -123,6 +156,10 @@ struct StackResult: Codable, Sendable {
     var created = Date()
     var mode: StackMode
     var bottomFirst: Bool?
+    var crop: StackCrop?
+
+    var outputWidth: Int { crop?.width ?? width }
+    var outputHeight: Int { crop?.height ?? height }
 }
 struct AstroProject: Identifiable, Codable, Sendable {
     var schema = 1
@@ -137,6 +174,8 @@ struct AstroProject: Identifiable, Codable, Sendable {
     var redo: [Adjustments] = []
     var result: StackResult?
     var jobInProgress = false
+
+    var usesScreenStretch: Bool { adjustments.autoSTF ?? (result != nil) }
 }
 enum AstroError: LocalizedError {
     case message(String)

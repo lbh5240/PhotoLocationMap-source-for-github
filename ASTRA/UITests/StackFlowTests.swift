@@ -22,11 +22,21 @@ final class StackFlowTests: XCTestCase {
         let region = app.descendants(matching: .any)["reference-region"].firstMatch
         XCTAssertTrue(region.waitForExistence(timeout: 4))
         XCTAssertGreaterThan(region.frame.width, canvas.frame.width * 0.5, "从空白处拖动应按整个手势框选")
+        let portrait = app.buttons["region-aspect-9:16"]
+        if !portrait.isHittable { app.scrollViews["region-ratios"].swipeLeft() }
+        portrait.tap()
+        XCTAssertEqual(region.frame.width / region.frame.height, 9.0 / 16, accuracy: 0.015)
         app.buttons["完成"].tap()
         app.buttons["start-stack"].tap()
         let success = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "合成完成")).firstMatch
         XCTAssertTrue(success.waitForExistence(timeout: 35), app.debugDescription)
-        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "384 × 256 像素")).firstMatch.exists)
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "135 × 240 像素")).firstMatch.exists)
+        app.buttons["导出照片"].tap()
+        app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "PNG 16 位")).firstMatch.tap()
+        let share = app.buttons["导出并分享"]
+        if !share.isHittable { app.swipeUp() }
+        share.tap()
+        _ = app.buttons["取消"].waitForExistence(timeout: 6)
     }
 
     @MainActor

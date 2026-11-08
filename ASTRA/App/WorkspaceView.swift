@@ -104,7 +104,7 @@ struct WorkspaceView: View {
     private func info(_ p: AstroProject) -> String {
         if let r = p.result {
             let raw = p.frames.filter(\.included).allSatisfy { StackSelection.rawExtensions.contains(URL(fileURLWithPath: $0.fileName).pathExtension.lowercased()) }
-            return "\(r.width) × \(r.height) · \(raw ? "RAW 来源 · " : "")线性 Float32"
+            return "\(r.outputWidth) × \(r.outputHeight) · \(raw ? "RAW 来源 · " : "")线性 Float32"
         }
         guard let f = p.frames.first else { return "等待导入" }
         let resolution = String(format: "%.1f MP", Double(f.width*f.height)/1_000_000)
@@ -279,7 +279,7 @@ struct WorkspaceView: View {
                 }.buttonStyle(.plain).accessibilityIdentifier("auto-develop")
                 Text("分析每张照片的亮度、背景和偏色后计算参数；下方仍可逐项微调。")
                     .font(.caption2).foregroundStyle(.secondary)
-                HStack(spacing: 6) {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 3), spacing: 6) {
                     ForEach(DevelopMethod.allCases) { method in
                         Button(method.title) { store.chooseDevelopMethod(method) }
                             .font(.caption.weight(.medium))
@@ -294,7 +294,7 @@ struct WorkspaceView: View {
                     Text("堆栈后保留线性 Float32 主文件；预览是缩小的工作图，导出成片会从主文件重新计算。原始 NEF 不会被覆盖。")
                         .font(.caption2).foregroundStyle(.secondary)
                 }
-                Toggle("自动 STF 预览与成片", isOn: Binding(get: { p.adjustments.autoSTF ?? true }, set: { value in
+                Toggle("自动 STF 预览与成片", isOn: Binding(get: { p.usesScreenStretch }, set: { value in
                     store.update({ $0.adjustments.autoSTF = value }, render: true)
                 })).font(.caption.weight(.semibold)).tint(EditorStyle.accent)
                     .accessibilityIdentifier("auto-stf-toggle")
@@ -601,15 +601,15 @@ struct ExportView: View {
             Form {
                 Section("格式") { Picker("文件格式", selection: $kind) { ForEach(ExportKind.allCases) { Text($0.rawValue).tag($0) } }.pickerStyle(.inline) }
                 Section(kind == .exr ? "Float32 线性" : "全分辨率 · sRGB") {
-                    if let p = store.project { Text(p.result.map { "\($0.width) × \($0.height)" } ?? p.frames.first.map { "\($0.width) × \($0.height)" } ?? "") }
+                    if let p = store.project { Text(p.result.map { "\($0.outputWidth) × \($0.outputHeight)" } ?? p.frames.first.map { "\($0.width) × \($0.height)" } ?? "") }
                     Toggle("与屏幕预览一致（包含自动 STF）", isOn: $matchPreview)
-                        .disabled(kind == .exr || store.project?.result == nil || store.project?.adjustments.autoSTF == false)
+                        .disabled(kind == .exr || store.project?.usesScreenStretch != true)
                         .accessibilityIdentifier("export-match-preview")
                     Text(kind == .exr ? "OpenEXR 保存未调色的 Float32 线性堆栈，可在电脑上继续后期。原始 NEF 保存在工程中。" :
                          "默认沿用预览的拉伸、星云和调色效果。关闭上面的开关只会跳过 STF，其它调节仍会导出。")
                         .font(.caption).foregroundStyle(.secondary)
                     if store.project?.result == nil { Text("当前尚未堆栈，将导出第一张原片的编辑结果。").font(.caption).foregroundStyle(.orange) }
-                    Text("预览是 1600 像素线性工作图，导出从 Float32 主文件重新计算。成片裁去约 1.5% 对齐边缘；原始线性 OpenEXR 保留全幅。")
+                    Text(store.project?.result?.crop != nil ? "所有导出格式沿用合成时的主体框与比例，工程仍保留完整线性主文件。" : "成片可能自动修剪对齐边缘。未框选的 OpenEXR 保留完整线性画幅。")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Section("保存成片") {
@@ -771,6 +771,7 @@ private struct ReferenceRegionView: View {
                             }
                         }.padding(.horizontal)
                     }
+                    .accessibilityIdentifier("region-ratios")
                     HStack {
                         Text("框选大小")
                         Slider(value: Binding(get: {
@@ -782,12 +783,18 @@ private struct ReferenceRegionView: View {
                         .accessibilityIdentifier("region-size-slider")
                     }.padding(.horizontal)
                 }
-                Text("选定比例后拖动空白处重画，拖动框内可移动，双指或滑杆等比缩放。主体和周围至少保留 8 颗清晰星星。")
+                Text("主体框决定下次合成的预览和导出画幅。拖框内移动，双指或滑杆等比缩放。请留至少 8 颗清晰星星。")
                     .font(.subheadline).foregroundStyle(.secondary).padding(.horizontal)
                 HStack {
                     Button("使用整张主图") { draft = nil; store.update { $0.configuration.region = nil } }
                     Spacer()
-                    Button("完成") { store.flushSave(); dismiss() }.buttonStyle(.borderedProminent)
+                    Button("完成") {
+                        if store.project?.configuration.region != nil, let selected {
+                            store.update { $0.configuration.referenceFrameID = selected.id }
+                        }
+                        store.flushSave()
+                        dismiss()
+                    }.buttonStyle(.borderedProminent)
                 }.padding()
             }
             .background(EditorStyle.backdrop)

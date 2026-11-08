@@ -7,6 +7,8 @@ struct AstroProfile {
     let black: Float
     let white: Float
     let blackRGB: [Float]
+    let skyNoise: Float
+    let midtone: Float
 }
 
 enum AstroProcessing {
@@ -59,7 +61,7 @@ enum AstroProcessing {
         let blue = Float(adjustments.autoBlackBlue ?? Double(profile.blackRGB[2]))
         guard let result = try stfKernel.get().apply(extent: image.extent,
             arguments: [image, red, green, blue, max(white, black + 0.005),
-                        Float(adjustments.developMethod?.rawValue ?? 0)]) else {
+                        Float(adjustments.developMethod?.rawValue ?? 0), profile.skyNoise, profile.midtone]) else {
             throw AstroError.message("STF 预览渲染失败，请重试")
         }
         return result
@@ -99,6 +101,29 @@ enum AstroProcessing {
         }
         let black = 0.2126*blackRGB[0] + 0.7152*blackRGB[1] + 0.0722*blackRGB[2]
         let white = light.isEmpty ? 1 : light[min(light.count-1, light.count*995/1000)]
+        let span = max(white - black, 0.005)
+        let upperSky = light.isEmpty ? black : light[light.count * 75 / 100]
+        let midtone = light.isEmpty ? 0.15 : (light[light.count * 90 / 100] - black) / span
+        // Adjacent differences suppress slow gradients. Only use valid sky pixels
+        // to keep stars, cloud structure and the registration border out of the estimate.
+        let skyNoise: Float = data.withUnsafeBytes { bytes in
+            let p = bytes.bindMemory(to: Float.self)
+            func luma(_ i: Int) -> Float { 0.2126*p[i] + 0.7152*p[i+1] + 0.0722*p[i+2] }
+            var differences: [Float] = []
+            for y in stride(from: 0, to: height, by: 2) {
+                for x in stride(from: 0, to: width - 1, by: 2) {
+                    let i = (y*width+x)*4, j = i+4
+                    guard p[i+3] > 0.98, p[j+3] > 0.98 else { continue }
+                    let a = luma(i), b = luma(j)
+                    if a.isFinite, b.isFinite, max(a,b) <= upperSky {
+                        differences.append(abs(a-b))
+                    }
+                }
+            }
+            guard differences.count >= 16 else { return 0 }
+            differences.sort()
+            return 1.0484 * differences[differences.count / 2]
+        }
         let levels = cells.map { 0.2126*$0[0] + 0.7152*$0[1] + 0.0722*$0[2] }.sorted()
         let floor = max(0.005, levels[levels.count / 3])
         var grid = [Float](repeating: 1, count: gw*gh*4)
@@ -121,6 +146,6 @@ enum AstroProcessing {
         if bitmapRowsTopFirst { background = background.oriented(.downMirrored) }
         background = background.clampedToExtent().applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 0.9])
             .cropped(to: CGRect(x: 0, y: 0, width: gw, height: gh))
-        return AstroProfile(background: background, black: max(0,black), white: max(white,black+0.005), blackRGB: blackRGB)
+        return AstroProfile(background: background, black: max(0,black), white: black+span, blackRGB: blackRGB, skyNoise: skyNoise, midtone: midtone)
     }
 }

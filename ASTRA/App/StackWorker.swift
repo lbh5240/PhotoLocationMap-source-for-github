@@ -26,8 +26,13 @@ enum StackWorker {
         let formatNote = grouped.isEmpty ? nil : "本次只使用所选格式，另有 \(grouped.count) 张未参与。"
         for index in grouped { frames[index].rejection = formatNote }
         let divisor = cfg.halfResolution == true ? 2 : 1
-        let w = selected.map { frames[$0].width }.max()! / divisor
-        let h = selected.map { frames[$0].height }.max()! / divisor
+        let sizes = selected.map { i in
+            autoreleasepool {
+                pipeline.stackFrameSize(repository.url(project, frames[i].fileName), frame: frames[i])
+            }
+        }
+        let w = Int(ceil(sizes.map(\.width).max()! / CGFloat(divisor)))
+        let h = Int(ceil(sizes.map(\.height).max()! / CGFloat(divisor)))
         try repository.clearCache(project)
         let cache = repository.url(project, "Cache")
         try FileManager.default.createDirectory(at: cache, withIntermediateDirectories: true)
@@ -42,11 +47,19 @@ enum StackWorker {
         }
         var analyses: [Int: [AnyHashable: Any]] = [:]
         var proxyScales: [Int: Double] = [:]
+        var referenceBounds: [Int: CGRect] = [:]
         for (step, i) in selected.enumerated() {
             if token.isCancelled() { throw CancellationError() }
             try autoreleasepool {
                 progress(Double(step) / Double(selected.count) * 0.45, "解码与星点分析 \(step + 1) / \(selected.count)")
                 let original = try pipeline.decode(repository.url(project, frames[i].fileName))
+                let width = original.extent.width / CGFloat(divisor)
+                let height = original.extent.height / CGFloat(divisor)
+                guard width <= CGFloat(w), height <= CGFloat(h) else {
+                    throw AstroError.message("照片解码尺寸与堆栈画布不一致：\(frames[i].name)")
+                }
+                referenceBounds[i] = CGRect(x: (CGFloat(w) - width) / 2, y: (CGFloat(h) - height) / 2,
+                                            width: width, height: height)
                 let image = pipeline.registrationCanvas(original, width: w, height: h, divisor: divisor)
                 let proxy = pipeline.proxy(image)
                 let analysis = AstroBridge.analyze(pixels: proxy.data, width: proxy.width, height: proxy.height, skyFraction: cfg.mode == .landscape ? cfg.skyFraction : 1)
@@ -64,18 +77,20 @@ enum StackWorker {
         guard eligible.count >= 2 else {
             throw AstroError.message("只有 \(eligible.count) 张照片识别到至少 8 个星点，请扩大主体框或排除模糊照片。")
         }
-        let reference = requestedReference ?? eligible.max(by: { (frames[$0].quality ?? 0) < (frames[$1].quality ?? 0) })!
+        let reference = requestedReference ?? (cfg.region == nil ? nil : selected.first) ?? eligible.max(by: { (frames[$0].quality ?? 0) < (frames[$1].quality ?? 0) })!
         guard eligible.contains(reference) else {
             throw AstroError.message("主图的星点不足 8 个，请扩大主体框或选择另一张主图。")
         }
+        var crop: StackCrop?
         if let region = cfg.region, cfg.mode != .trails {
-            let ref = frames[reference]
-            let offsetX = (Double(w * divisor - ref.width) / 2) / Double(divisor) * proxyScales[reference]!
-            let offsetY = (Double(h * divisor - ref.height) / 2) / Double(divisor) * proxyScales[reference]!
-            let x0 = offsetX + region.x * Double(ref.width) / Double(divisor) * proxyScales[reference]!
-            let y0 = offsetY + region.y * Double(ref.height) / Double(divisor) * proxyScales[reference]!
-            let x1 = x0 + region.width * Double(ref.width) / Double(divisor) * proxyScales[reference]!
-            let y1 = y0 + region.height * Double(ref.height) / Double(divisor) * proxyScales[reference]!
+            guard let bounds = referenceBounds[reference],
+                  let selectedCrop = StackCrop(region: region, reference: bounds, aspect: cfg.regionAspect) else {
+                throw AstroError.message("主体框太小，请扩大后重新合成。")
+            }
+            crop = selectedCrop
+            let scale = proxyScales[reference]!
+            let x0 = selectedCrop.rect.minX * scale, y0 = selectedCrop.rect.minY * scale
+            let x1 = selectedCrop.rect.maxX * scale, y1 = selectedCrop.rect.maxY * scale
             var referenceAnalysis = analyses[reference]!
             let stars = (referenceAnalysis["stars"] as? [[NSNumber]] ?? []).filter { star in
                 star.count >= 2 && star[0].doubleValue >= x0 && star[0].doubleValue <= x1 &&
@@ -126,6 +141,6 @@ enum StackWorker {
             if token.isCancelled() { throw CancellationError() }
             throw AstroError.message(error)
         }
-        return StackWorkResult(frames: frames, result: StackResult(fileName: fileName, width: w, height: h, acceptedFrames: accepted.count, mode: cfg.mode, bottomFirst: true), formatNote: formatNote)
+        return StackWorkResult(frames: frames, result: StackResult(fileName: fileName, width: w, height: h, acceptedFrames: accepted.count, mode: cfg.mode, bottomFirst: true, crop: crop), formatNote: formatNote)
     }
 }

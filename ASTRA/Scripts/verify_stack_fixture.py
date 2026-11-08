@@ -3,6 +3,7 @@ from pathlib import Path
 import array
 import json
 import math
+import struct
 import sys
 
 root = Path(sys.argv[1])
@@ -44,3 +45,12 @@ assert sum(v > vertical_peak * .5 for v in vertical_profile) <= 2, vertical_prof
 measured = [frame["registrationRMS"] for frame in project["frames"]]
 assert all(0 <= residual <= .65 for residual in measured), measured
 print('Verified output: 3 imported PNGs, 384x256, valid combined pixels, temporary decode files removed')
+
+cropped_folder, cropped_project = next((folder, p) for folder, p in results if p["result"].get("crop"))
+crop = cropped_project["result"]["crop"]
+assert crop["width"] * 16 == crop["height"] * 9, crop
+assert (crop["width"], crop["height"]) == (135, 240), crop
+png = next((cropped_folder / "Exports").glob("*.png")).read_bytes()
+assert png[:8] == b"\x89PNG\r\n\x1a\n"
+assert struct.unpack(">II", png[16:24]) == (crop["width"], crop["height"])
+print("Verified 9:16 subject frame in both stack metadata and exported PNG")

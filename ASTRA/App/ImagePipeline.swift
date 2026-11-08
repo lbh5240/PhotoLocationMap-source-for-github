@@ -137,6 +137,15 @@ final class ImagePipeline {
         }
         return f
     }
+    func stackFrameSize(_ url: URL, frame: FrameRecord) -> CGSize {
+        guard StackSelection.rawExtensions.contains(url.pathExtension.lowercased()),
+              let raw = CIRAWFilter(imageURL: url), raw.nativeSize.width >= 16, raw.nativeSize.height >= 16 else {
+            return CGSize(width: frame.width, height: frame.height)
+        }
+        let size = raw.nativeSize
+        return raw.orientation.rawValue >= 5 ? CGSize(width: size.height, height: size.width) : size
+    }
+
     func registrationCanvas(_ image: CIImage, width: Int, height: Int, divisor: Int) -> CIImage {
         let scaled = image.transformed(by: CGAffineTransform(scaleX: 1 / CGFloat(divisor), y: 1 / CGFloat(divisor)))
         let centered = scaled.transformed(by: CGAffineTransform(
@@ -193,7 +202,12 @@ final class ImagePipeline {
     }
     // Registration leaves incomplete coverage at the outer canvas. Keep the Float32
     // master untouched; trim only the developed view and its matching export.
-    func finishedStackView(_ image: CIImage) -> CIImage {
+    func finishedStackView(_ image: CIImage, result: StackResult, linearExport: Bool = false) -> CIImage {
+        if let crop = result.crop {
+            return image.cropped(to: crop.rect)
+                .transformed(by: CGAffineTransform(translationX: -crop.rect.minX, y: -crop.rect.minY))
+        }
+        if linearExport { return image }
         let e = image.extent.integral
         let sample = proxy(image, maxSide: 256)
         var inset = 0.03
