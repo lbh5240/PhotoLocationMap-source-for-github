@@ -313,20 +313,35 @@ final class ImagePipeline {
         }
         let density = adjustments.starSpikeDensity ?? .sparse
         let count = density.starLimit(detected: spikeStars.count)
-        guard count > 0,
-              let mask = CGContext(data: nil, width: Int(spikeSize.width), height: Int(spikeSize.height),
-                                   bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceGray(),
-                                   bitmapInfo: CGImageAlphaInfo.none.rawValue) else { return nil }
-        mask.setFillColor(gray: 0, alpha: 1)
-        mask.fill(CGRect(origin: .zero, size: spikeSize))
-        mask.setFillColor(gray: 1, alpha: 1)
-        for star in spikeStars.prefix(count) where star.count >= 4 {
-            let x = star[0].doubleValue + 0.5
-            let y = star[1].doubleValue + 0.5
-            let radius = min(4.5, max(2.75, 1.5 * star[3].doubleValue))
-            mask.fillEllipse(in: CGRect(x: x - radius, y: y - radius, width: 2*radius, height: 2*radius))
+        guard count > 0 else { return nil }
+        let width = Int(spikeSize.width), height = Int(spikeSize.height)
+        var pixels = Data(count: width * height)
+        pixels.withUnsafeMutableBytes { (bytes: UnsafeMutableRawBufferPointer) in
+            for star in spikeStars.prefix(count) where star.count >= 4 {
+                let x = star[0].doubleValue
+                let y = star[1].doubleValue
+                let radius = min(4.5, max(2.75, 1.5 * star[3].doubleValue))
+                let left = max(0, Int(floor(x - radius)))
+                let right = min(width - 1, Int(ceil(x + radius)))
+                let bottom = max(0, Int(floor(y - radius)))
+                let top = min(height - 1, Int(ceil(y + radius)))
+                for row in bottom...top {
+                    // Analysis uses bottom-first rows. CGImage data is top-first.
+                    let offset = (height - 1 - row) * width
+                    for column in left...right {
+                        let distance = hypot(Double(column) - x, Double(row) - y)
+                        let weight = min(1, max(0, radius - distance))
+                        let index = offset + column
+                        bytes[index] = max(bytes[index], UInt8((weight * 255).rounded()))
+                    }
+                }
+            }
         }
-        guard let bitmap = mask.makeImage() else { return nil }
+        guard let provider = CGDataProvider(data: pixels as CFData),
+              let bitmap = CGImage(width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 8,
+                                   bytesPerRow: width, space: CGColorSpaceCreateDeviceGray(),
+                                   bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.none.rawValue),
+                                   provider: provider, decode: nil, shouldInterpolate: true, intent: .defaultIntent) else { return nil }
         return CIImage(cgImage: bitmap)
             .transformed(by: CGAffineTransform(scaleX: extent.width / spikeSize.width,
                                                y: extent.height / spikeSize.height))

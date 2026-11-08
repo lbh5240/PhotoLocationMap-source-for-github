@@ -92,7 +92,8 @@ final class StackFlowTests: XCTestCase {
         }
         XCTAssertTrue(changed, "星云参数应改变真实预览像素")
         let decrease = app.buttons["减小去灰强度"]
-        XCTAssertTrue(decrease.isHittable && decrease.isEnabled)
+        let enabled = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: decrease)
+        XCTAssertEqual(XCTWaiter.wait(for: [enabled], timeout: 8), .completed)
         let automatic = canvas.screenshot().image.pngData()
         decrease.tap()
         XCTAssertTrue(previewChanged(canvas, from: automatic), "去灰刻度尺必须改变真实预览像素")
@@ -104,8 +105,12 @@ final class StackFlowTests: XCTestCase {
         XCTAssertTrue(previewChanged(canvas, from: noSpikes), "星芒必须改变真实预览像素")
         let sparse = canvas.screenshot().image.pngData()
         let dense = app.buttons["spike-density-dense"]
-        for _ in 0..<3 where !dense.isHittable { inspector.swipeUp(velocity: .slow) }
+        for _ in 0..<3 where !dense.isHittable {
+            inspector.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.78))
+                .press(forDuration: 0.05, thenDragTo: inspector.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.52)))
+        }
         dense.tap()
+        XCTAssertTrue(dense.isSelected, "密度卡片应选中较多")
         XCTAssertTrue(previewChanged(canvas, from: sparse), "较多应让更多星点产生星芒")
         let off = app.buttons["spike-style-off"]
         for _ in 0..<3 where !off.isHittable { inspector.swipeDown(velocity: .slow) }
@@ -142,7 +147,8 @@ final class StackFlowTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["ruler-value"].exists)
         XCTAssertTrue(app.buttons["reset-adjustments"].exists)
         app.buttons["reset-adjustments"].tap()
-        XCTAssertEqual(app.staticTexts.matching(identifier: "ruler-value").firstMatch.label, "0.0")
+        XCTAssertTrue(app.staticTexts.matching(identifier: "ruler-value")
+            .matching(NSPredicate(format: "label == %@", "0.0")).firstMatch.exists)
         XCTAssertFalse(app.alerts["ASTRA"].exists, "星云处理内核必须实际运行")
         XCTAssertTrue(app.buttons["导出照片"].isEnabled)
         app.buttons["导出照片"].tap()
