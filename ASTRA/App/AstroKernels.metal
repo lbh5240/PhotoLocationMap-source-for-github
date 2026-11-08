@@ -2,14 +2,15 @@
 using namespace metal;
 
 [[stitchable]] float4 astroStretch(coreimage::sample_t source, coreimage::sample_t smooth,
-                    coreimage::sample_t background,
-                    float arc, float masked, float gradient, float nebula, float protect,
+                    coreimage::sample_t background, coreimage::sample_t skyGradient,
+                    float arc, float masked, float gradient, float adaptive, float nebula, float protect,
                     float neutral, float green, float reduceStars, float structure, float starColor) {
     float3 sky = background.rgb;
     float skyL = dot(sky, float3(0.2126, 0.7152, 0.0722));
     float3 cast = neutral * (sky - float3(skyL));
-    float3 raw = source.rgb - gradient * (sky - float3(0.012)) - cast;
-    float3 filtered = smooth.rgb - gradient * (sky - float3(0.012)) - cast;
+    float3 correction = gradient * (sky - float3(0.012)) + adaptive * skyGradient.r + cast;
+    float3 raw = source.rgb - correction;
+    float3 filtered = smooth.rgb - correction;
     // A differentiable floor avoids abrupt black contours around diffuse nebulosity.
     float3 rgb = 0.5 * (raw + sqrt(raw * raw + float3(0.000001)));
     float3 low = 0.5 * (filtered + sqrt(filtered * filtered + float3(0.000001)));
@@ -41,7 +42,7 @@ using namespace metal;
 }
 
 [[stitchable]] float4 astroSTF(coreimage::sample_t source, float blackR, float blackG,
-                              float blackB, float white, float method, float skyNoise, float midtone) {
+                              float blackB, float white, float method, float skyNoise, float midtone, float adaptive) {
     float3 black = float3(blackR, blackG, blackB);
     float sky = dot(black, float3(0.2126, 0.7152, 0.0722));
     float toe = max((white - sky) * 0.02, 0.0005);
@@ -49,6 +50,11 @@ using namespace metal;
     float3 rgb = 0.5 * (delta + sqrt(delta * delta + float3(toe * toe)));
     float l = dot(rgb, float3(0.2126, 0.7152, 0.0722));
     float x = l / max(white - sky, 0.00001);
+    if (adaptive > 0.5 && (method < 2.5 || method >= 3.5)) {
+        // Limit the gain near the measured noise floor across all adaptive curves.
+        const float knee = clamp(2.0 * skyNoise / max(white - sky, 0.005), 0.0, 0.20);
+        x *= x / max(x + knee, 0.000001);
+    }
     float mapped;
     if (method < 0.5) {
         // Colour-preserving arcsinh with a continuous shoulder.

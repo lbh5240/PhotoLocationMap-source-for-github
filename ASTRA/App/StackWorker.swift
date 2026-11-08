@@ -47,6 +47,7 @@ enum StackWorker {
         }
         var analyses: [Int: [AnyHashable: Any]] = [:]
         var proxyScales: [Int: Double] = [:]
+        var frameNoise: [Int: Double] = [:]
         var referenceBounds: [Int: CGRect] = [:]
         for (step, i) in selected.enumerated() {
             if token.isCancelled() { throw CancellationError() }
@@ -64,6 +65,7 @@ enum StackWorker {
                 let proxy = pipeline.proxy(image)
                 let analysis = AstroBridge.analyze(pixels: proxy.data, width: proxy.width, height: proxy.height, skyFraction: cfg.mode == .landscape ? cfg.skyFraction : 1)
                 analyses[i] = analysis; proxyScales[i] = proxy.scale
+                if cfg.mode == .sky { frameNoise[i] = AutoDevelop.skyNoise(proxy) }
                 frames[i].starCount = (analysis["stars"] as? [Any])?.count ?? 0
                 frames[i].quality = (analysis["quality"] as? NSNumber)?.doubleValue ?? 0
                 frames[i].rejection = nil; frames[i].registrationRMS = nil
@@ -104,6 +106,7 @@ enum StackWorker {
             }
         }
         var accepted: [[String: Any]] = []
+        var acceptedNoise: [Int: Double] = [:]
         for (step, i) in selected.enumerated() {
             if token.isCancelled() { throw CancellationError() }
             progress(0.45 + Double(step) / Double(selected.count) * 0.08, "全尺寸星点对齐 \(step + 1) / \(selected.count)")
@@ -128,12 +131,24 @@ enum StackWorker {
             let offset = ((t["offset"] as? NSNumber)?.doubleValue ?? 0)
             frames[i].registrationRMS = ((t["rms"] as? NSNumber)?.doubleValue ?? 0)
             // Geometry uses pixel-center coordinates at each scale.
+            if let noise = frameNoise[i], noise > 0 {
+                // HDR fusion already applies the gain-squared correction in the core.
+                acceptedNoise[accepted.count] = noise * (cfg.hdrFusion == true ? 1 : gain)
+            }
             accepted.append(["path": cacheURL(i).path, "half": true, "a": a, "b": b, "tx": tx, "ty": ty, "weight": max(0.01, min(100, frames[i].quality ?? 1)), "gain": gain, "offset": offset])
         }
         guard accepted.count >= 2 else {
             let reasons = selected.compactMap { frames[$0].rejection }.prefix(2).joined(separator: "；")
             let detail = reasons.isEmpty ? "" : "\n\(reasons)"
             throw AstroError.message("选中的 \(selected.count) 张照片中只有 \(accepted.count) 张对齐成功。请使用同一片天空的清晰照片。\(detail)")
+        }
+        let measured = acceptedNoise.values.sorted()
+        if measured.count >= 2 {
+            let typical = measured[measured.count / 2]
+            for (index, noise) in acceptedNoise {
+                let quality = accepted[index]["weight"] as? Double ?? 1
+                accepted[index]["weight"] = quality * AutoDevelop.noiseWeight(noise: noise, typical: typical)
+            }
         }
         let fileName = "Master-\(UUID().uuidString).rgba"
         let out = repository.url(project, fileName)

@@ -272,12 +272,12 @@ struct WorkspaceView: View {
         case .astro:
             VStack(alignment: .leading, spacing: 8) {
                 Button { store.autoDevelop() } label: {
-                    Label("智能显影 · 保留亮核与云气", systemImage: "sparkles")
+                    Label("智能显影 · 自适应去灰", systemImage: "sparkles")
                         .font(.caption.weight(.semibold)).foregroundStyle(EditorStyle.accent)
                         .frame(maxWidth: .infinity, minHeight: 35)
                         .background(EditorStyle.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 11))
                 }.buttonStyle(.plain).accessibilityIdentifier("auto-develop")
-                Text("分析每张照片的亮度、背景和偏色后计算参数；下方仍可逐项微调。")
+                Text("从当前图像估计天空梯度和噪声，再校正背景与暗部；下方可微调强度。")
                     .font(.caption2).foregroundStyle(.secondary)
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 3), spacing: 6) {
                     ForEach(DevelopMethod.allCases) { method in
@@ -304,7 +304,7 @@ struct WorkspaceView: View {
                 ParameterInspector(parameters: [
                     astroParameter("Arcsinh 拉伸", "sparkles", \.arcsinh, 0...60, step: 2, precision: 1),
                     astroParameter("Masked Stretch · 核心保护", "circle.dotted.circle", \.maskedStretch, 0...1),
-                    astroParameter("背景梯度消除", "moon.stars", \.gradientRemoval, 0...1),
+                    astroParameter(p.adjustments.adaptiveSky == true ? "自适应去灰" : "背景梯度消除", "moon.stars", \.gradientRemoval, 0...1),
                     astroParameter("星云对比", "cloud", \.nebulaContrast, 0...1),
                     astroParameter("云气结构", "waveform.path", \.nebulaStructure, 0...1)
                 ], checkpoint: store.checkpoint).id("astro-nebula")

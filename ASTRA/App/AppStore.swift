@@ -85,6 +85,13 @@ private actor PreviewWorker {
         let pipeline = self.pipeline ?? ImagePipeline()
         var adjustments = try AutoDevelop.suggest(pipeline.proxy(proxy, maxSide: 256))
         let profile = astroProfile ?? pipeline.astroProfile(proxy)
+        adjustments.adaptiveSky = true
+        let span = Double(profile.white - profile.black)
+        let signal = span * min(0.45, max(0.08, Double(profile.midtone)))
+        adjustments.gradientRemoval = AutoDevelop.skyCorrection(spread: profile.skySpread,
+                                                                noise: Double(profile.skyNoise), signal: signal)
+        // The STF handles noise-floor gain. Avoid adding a fixed blur to clean data.
+        adjustments.noise = 0
         let corrected = try pipeline.edit(proxy, adjustments, profile: profile)
         try AutoDevelop.calibrateSTF(&adjustments, sample: pipeline.proxy(corrected, maxSide: 256))
         return adjustments
