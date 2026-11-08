@@ -176,6 +176,8 @@ enum AutoDevelop {
         let w = sample.width, h = sample.height
         if a.adaptiveSky == true { a.adaptiveSkyNoise = skyNoise(sample) }
         var pixels: [(Double, Double, Double, Double)] = []
+        let columns = 8, rows = 8
+        var tileLights = [[Double]](repeating: [], count: columns * rows)
         sample.data.withUnsafeBytes { raw in
             let v = raw.bindMemory(to: Float.self)
             for y in stride(from: 0, to: h, by: 2) {
@@ -184,7 +186,11 @@ enum AutoDevelop {
                     guard v[i+3] > 0.8 else { continue }
                     let r = Double(v[i]), g = Double(v[i+1]), b = Double(v[i+2])
                     guard r.isFinite, g.isFinite, b.isFinite else { continue }
-                    pixels.append((0.2126*r+0.7152*g+0.0722*b, r, g, b))
+                    let light = 0.2126*r+0.7152*g+0.0722*b
+                    pixels.append((light, r, g, b))
+                    if a.adaptiveSky == true, v[i+3] > 0.98 {
+                        tileLights[(y*rows/h)*columns + x*columns/w].append(light)
+                    }
                 }
             }
         }
@@ -207,6 +213,21 @@ enum AutoDevelop {
         let sky = 0.2126*r+0.7152*g+0.0722*b
         a.autoBlack = sky
         let bright = pixels[min(n-1, n*995/1000)].0
-        a.autoWhite = max(sky+0.015, bright)
+        let white = max(sky+0.015, bright)
+        a.autoWhite = white
+        if a.adaptiveSky == true {
+            let backgroundLevels = tileLights.compactMap { tile -> Double? in
+                guard tile.count >= 12 else { return nil }
+                return tile.sorted()[tile.count * 65 / 100]
+            }.sorted()
+            // A tile percentile captures remaining low-frequency haze without
+            // letting a small bright nebula or a few stars set the dark toe.
+            let skyUpper = backgroundLevels.count >= 12
+                ? min(backgroundLevels[backgroundLevels.count * 3 / 4], pixels[n * 85 / 100].0)
+                : pixels[n * 70 / 100].0
+            let noise = a.adaptiveSkyNoise ?? 0
+            let skySignal = max(skyUpper - sky, 2.5 * noise)
+            a.adaptiveShadowKnee = min(0.68, max(0.025, 6 * skySignal / (white - sky)))
+        }
     }
 }

@@ -90,6 +90,7 @@ struct Adjustments: Codable, Equatable, Sendable {
     var gradientRemoval: Double?
     var adaptiveSky: Bool?
     var adaptiveSkyNoise: Double?
+    var adaptiveShadowKnee: Double?
     var nebulaContrast: Double?
     var starProtection: Double?
     var backgroundNeutralization: Double?

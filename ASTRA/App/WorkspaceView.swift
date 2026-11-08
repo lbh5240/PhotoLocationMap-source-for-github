@@ -277,7 +277,7 @@ struct WorkspaceView: View {
                         .frame(maxWidth: .infinity, minHeight: 35)
                         .background(EditorStyle.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 11))
                 }.buttonStyle(.plain).accessibilityIdentifier("auto-develop")
-                Text("从当前图像估计天空梯度和噪声，再校正背景与暗部；下方可微调强度。")
+                Text("先校正天空梯度，再根据残余灰底和噪声自适应压低暗部。")
                     .font(.caption2).foregroundStyle(.secondary)
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 3), spacing: 6) {
                     ForEach(DevelopMethod.allCases) { method in

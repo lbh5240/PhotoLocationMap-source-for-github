@@ -30,6 +30,24 @@ enum AutoDevelopTests {
         let coreL = 0.2126*(Double(pixels[core])-black[0]) + 0.7152*(Double(pixels[core+1])-black[1]) + 0.0722*(Double(pixels[core+2])-black[2])
         let coreMapped = 1-exp(-1.7*asinh(8*max(0,coreL)/white)/asinh(8))
         precondition(coreMapped > 0.5 && coreMapped < 1, "Core must remain visible without clipping")
+        var hazy = a
+        hazy.adaptiveSky = true
+        try AutoDevelop.calibrateSTF(&hazy, sample: sample)
+        var cleanPixels = pixels
+        for y in 0..<h { for x in 0..<w {
+            let dx = (Double(x)-Double(w)/2)/Double(w)
+            let dy = (Double(y)-Double(h)/2)/Double(h)
+            let glow = Float(0.085*exp(-(dx*dx+dy*dy)/0.085))
+            let i = (y*w+x)*4
+            cleanPixels[i] -= 0.8 * glow
+            cleanPixels[i+1] -= glow
+            cleanPixels[i+2] -= 1.15 * glow
+        } }
+        var clean = hazy
+        let cleanData = cleanPixels.withUnsafeBytes { Data($0) }
+        try AutoDevelop.calibrateSTF(&clean, sample: (cleanData, w, h, 1.0))
+        precondition((hazy.adaptiveShadowKnee ?? 0) > 0.3, "Residual sky glow needs a measured shadow toe")
+        precondition((clean.adaptiveShadowKnee ?? 1) < 0.1, "Flat sky should keep a narrow shadow toe")
         print("PASS adaptive STF: sky \(skyMapped), core \(coreMapped), background \(a.autoBlack!)")
     }
     private static func verifySkyModel() {

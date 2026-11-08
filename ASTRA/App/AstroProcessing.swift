@@ -71,7 +71,8 @@ enum AstroProcessing {
             arguments: [image, red, green, blue, max(white, black + 0.005),
                         Float(adjustments.developMethod?.rawValue ?? 0),
                         Float(adjustments.adaptiveSkyNoise ?? Double(profile.skyNoise)), profile.midtone,
-                        adjustments.adaptiveSky == true ? Float(1) : Float(0)]) else {
+                        adjustments.adaptiveSky == true ? Float(1) : Float(0),
+                        Float(adjustments.adaptiveShadowKnee ?? 0)]) else {
             throw AstroError.message("STF 预览渲染失败，请重试")
         }
         return result

@@ -42,7 +42,7 @@ using namespace metal;
 }
 
 [[stitchable]] float4 astroSTF(coreimage::sample_t source, float blackR, float blackG,
-                              float blackB, float white, float method, float skyNoise, float midtone, float adaptive) {
+                              float blackB, float white, float method, float skyNoise, float midtone, float adaptive, float shadowKnee) {
     float3 black = float3(blackR, blackG, blackB);
     float sky = dot(black, float3(0.2126, 0.7152, 0.0722));
     float toe = max((white - sky) * 0.02, 0.0005);
@@ -50,7 +50,17 @@ using namespace metal;
     float3 rgb = 0.5 * (delta + sqrt(delta * delta + float3(toe * toe)));
     float l = dot(rgb, float3(0.2126, 0.7152, 0.0722));
     float x = l / max(white - sky, 0.00001);
-    if (adaptive > 0.5 && (method < 2.5 || method >= 3.5)) {
+    if (adaptive > 0.5 && shadowKnee > 0.0) {
+        const float span = max(white - sky, 0.005);
+        // Compute signed luminance before the per-channel colour floor.
+        // Applying the floor first would turn zero-mean sky noise into glow.
+        const float signedSignal = dot(delta, float3(0.2126, 0.7152, 0.0722)) / span;
+        const float rounding = min(0.002, 0.025 * shadowKnee);
+        const float signal = 0.5 * (signedSignal +
+            sqrt(signedSignal * signedSignal + rounding * rounding));
+        // Smoothly restore unity gain before the brightest parts of the nebula.
+        x = signal * mix(0.02, 1.0, smoothstep(0.0, shadowKnee, signal));
+    } else if (adaptive > 0.5 && (method < 2.5 || method >= 3.5)) {
         // Limit the gain near the measured noise floor across all adaptive curves.
         const float knee = clamp(2.0 * skyNoise / max(white - sky, 0.005), 0.0, 0.20);
         x *= x / max(x + knee, 0.000001);
