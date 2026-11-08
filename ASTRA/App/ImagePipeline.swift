@@ -87,6 +87,44 @@ final class ImagePipeline {
         guard e.width.isFinite, e.height.isFinite, e.width >= 16, e.height >= 16, e.width <= 30000, e.height <= 30000 else { throw AstroError.message("图片尺寸不支持") }
         return image.transformed(by: CGAffineTransform(translationX: -e.minX, y: -e.minY)).cropped(to: CGRect(origin: .zero, size: e.size))
     }
+    func rawMetadata(_ url: URL, name: String, stored: String) throws -> FrameRecord {
+        let source = CGImageSourceCreateWithURL(url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary)
+        let props = source.flatMap { CGImageSourceCopyPropertiesAtIndex($0, 0, nil) as? [String: Any] } ?? [:]
+        var frame = FrameRecord(name: name, fileName: stored)
+        frame.width = (props[kCGImagePropertyPixelWidth as String] as? NSNumber)?.intValue ?? 0
+        frame.height = (props[kCGImagePropertyPixelHeight as String] as? NSNumber)?.intValue ?? 0
+        if let tiff = props[kCGImagePropertyTIFFDictionary as String] as? [String: Any] {
+            frame.camera = tiff[kCGImagePropertyTIFFModel as String] as? String ?? ""
+        }
+        if let exif = props[kCGImagePropertyExifDictionary as String] as? [String: Any] {
+            frame.exposure = (exif[kCGImagePropertyExifExposureTime as String] as? NSNumber)?.doubleValue
+            frame.iso = (exif[kCGImagePropertyExifISOSpeedRatings as String] as? [NSNumber])?.first?.doubleValue
+        }
+        if frame.width < 16 || frame.height < 16 {
+            let extent = try decode(url).extent
+            frame.width = Int(extent.width); frame.height = Int(extent.height)
+        }
+        return frame
+    }
+    func embeddedRAWPreview(_ url: URL, maxSide: Int = 1600) -> CGImage? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: false,
+            kCGImageSourceCreateThumbnailFromImageIfAbsent: false,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxSide,
+            kCGImageSourceShouldCacheImmediately: false
+        ]
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
+    }
+    func rawPreviewPlaceholder() throws -> CGImage {
+        let image = CIImage(color: CIColor(red: 0.075, green: 0.085, blue: 0.12))
+            .cropped(to: CGRect(x: 0, y: 0, width: 256, height: 256))
+        guard let result = context.createCGImage(image, from: image.extent, format: .RGBA8, colorSpace: display) else {
+            throw AstroError.message("无法生成 NEF 占位预览")
+        }
+        return result
+    }
     func metadata(_ url: URL, image: CIImage, name: String, stored: String) -> FrameRecord {
         var f = FrameRecord(name: name, fileName: stored)
         f.width = Int(image.extent.width); f.height = Int(image.extent.height)

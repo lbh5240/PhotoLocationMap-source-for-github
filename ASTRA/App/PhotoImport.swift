@@ -41,7 +41,8 @@ enum PhotoImportSource: Sendable {
         }
     }
 
-    func withFile<Result>(format: PhotoFormat?, _ operation: (URL, Bool) throws -> Result) async throws -> Result {
+    func withFile<Result>(format: PhotoFormat?, progress: @escaping @Sendable (Double, String) -> Void,
+                          _ operation: (URL, Bool) throws -> Result) async throws -> Result {
         switch self {
         case .file(let url):
             let access = url.startAccessingSecurityScopedResource()
@@ -52,13 +53,16 @@ enum PhotoImportSource: Sendable {
             let requested = format ?? (formats == [.raw] ? .raw : .processed)
             if requested == .raw {
                 if let resource = await OriginalPhotoResource.resources(for: item)?.first(where: OriginalPhotoResource.isRAW) {
-                    photo = try await OriginalPhotoResource.stage(resource)
+                    photo = try await OriginalPhotoResource.stage(resource, progress: progress)
                 } else {
+                    progress(0, "正在从相册读取 RAW 原件")
                     photo = try await item.loadTransferable(type: RAWPhotoFile.self)?.file
                 }
             } else if item.supportedContentTypes.contains(where: { $0.conforms(to: .jpeg) }) {
+                progress(0, "正在从相册读取 JPEG")
                 photo = try await item.loadTransferable(type: JPEGPhotoFile.self)?.file
             } else {
+                progress(0, "正在从相册读取照片")
                 photo = try await item.loadTransferable(type: SelectedPhotoFile.self)
             }
             guard let photo else {
@@ -126,15 +130,21 @@ private enum OriginalPhotoResource {
         return PHAssetResource.assetResources(for: asset).filter { $0.type == .photo || $0.type == .alternatePhoto }
     }
 
-    static func stage(_ resource: PHAssetResource) async throws -> SelectedPhotoFile {
+    static func stage(_ resource: PHAssetResource,
+                      progress: @escaping @Sendable (Double, String) -> Void) async throws -> SelectedPhotoFile {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("ASTRA-Photo-\(UUID())", isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: false)
         let filename = (resource.originalFilename as NSString).lastPathComponent
         let url = folder.appendingPathComponent(filename.isEmpty ? "Original.nef" : filename)
         let options = PHAssetResourceRequestOptions()
         options.isNetworkAccessAllowed = true
+        progress(0, "正在读取 NEF 原件（若位于 iCloud，需先下载）")
+        options.progressHandler = { fraction in
+            progress(fraction, "正在下载 NEF 原件 \(Int(fraction * 100))%")
+        }
         do {
             try await PHAssetResourceManager.default().writeData(for: resource, toFile: url, options: options)
+            progress(1, "NEF 原件已读取")
             guard isRAW(resource) else { throw AstroError.message("相册返回的原件并非 RAW。") }
             return SelectedPhotoFile(directory: folder, url: url, format: .raw)
         } catch {

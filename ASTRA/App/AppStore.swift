@@ -37,8 +37,23 @@ private actor PreviewWorker {
             let pipeline = self.pipeline ?? ImagePipeline()
             self.pipeline = pipeline
             if key != url || proxy == nil || before == nil {
-                let source = try project.result.map { try pipeline.master($0, repository: repository, project: project) }
-                    ?? pipeline.decode(url)
+                let source: CIImage
+                if let result = project.result {
+                    source = try pipeline.master(result, repository: repository, project: project)
+                } else if StackSelection.rawExtensions.contains(url.pathExtension.lowercased()) {
+                    let frame = project.frames.first { $0.fileName == url.lastPathComponent || repository.url(project, $0.fileName) == url }
+                    let thumbnail = frame.map { repository.url(project, "Thumbs/\($0.id.uuidString).preview.jpg") }
+                    if let thumbnail, let image = CIImage(contentsOf: thumbnail, options: [.applyOrientationProperty: true]) {
+                        source = image
+                    } else {
+                        let cg: CGImage
+                        if let embedded = pipeline.embeddedRAWPreview(url) { cg = embedded }
+                        else { cg = try pipeline.rawPreviewPlaceholder() }
+                        source = CIImage(cgImage: cg, options: [.colorSpace: pipeline.display])
+                    }
+                } else {
+                    source = try pipeline.decode(url)
+                }
                 let image = try pipeline.previewSource(source)
                 astroProfile = project.result == nil ? nil : pipeline.astroProfile(image)
                 proxy = image
@@ -86,6 +101,8 @@ final class AppStore: ObservableObject {
     @Published var formatRequest: PhotoFormatRequest?
     private var repository: ProjectRepository?
     private var cancelToken: ASCancelToken?
+    private var importWorker: Task<(Int, [String]), Never>?
+    private var activeImportID: UUID?
     private var saveTask: Task<Void, Never>?
     private var previewTask: Task<Void, Never>?
     private var previewGeneration = 0
@@ -171,10 +188,16 @@ final class AppStore: ObservableObject {
     private func prepareImport(_ sources: [PhotoImportSource], title: String) {
         guard !sources.isEmpty, !busy, project != nil else { return }
         busy = true; status = "检查相册原件"; progress = 0
+        UIApplication.shared.isIdleTimerDisabled = true
         Task {
             var available: [Set<PhotoFormat>] = []
-            for source in sources { available.append(await source.availableFormats()) }
+            for (index, source) in sources.enumerated() {
+                status = "检查相册原件 \(index + 1) / \(sources.count)"
+                available.append(await source.availableFormats())
+                progress = Double(index + 1) / Double(sources.count)
+            }
             let formats = Set(available.flatMap { $0 })
+            UIApplication.shared.isIdleTimerDisabled = false
             busy = false
             if formats.count > 1 { formatRequest = .importing(sources, available: available, title: title) }
             else { importImages(sources, title: title, format: formats.first) }
@@ -194,76 +217,135 @@ final class AppStore: ObservableObject {
         flushSave()
         previewTask?.cancel()
         busy = true
-        status = title
-        progress = 0
+        canCancel = true; status = "\(title) · 请保持屏幕解锁"; progress = 0
+        UIApplication.shared.isIdleTimerDisabled = true
+        let importID = UUID(); activeImportID = importID
+        let backgroundID = UIApplication.shared.beginBackgroundTask(withName: "ASTRA Import") { [weak self] in
+            Task { @MainActor in
+                self?.importWorker?.cancel()
+                self?.status = "系统后台时间已结束，已保存完成的照片。请解锁并重新导入剩余照片。"
+            }
+        }
         Task {
             await previewWorker.reset()
-            let result = await Task.detached(priority: .userInitiated) { () -> ([FrameRecord], [String]) in
+            let worker = Task.detached(priority: .userInitiated) { () -> (Int, [String]) in
                 let pipeline = ImagePipeline()
-                var frames: [FrameRecord] = []
+                var imported = 0
                 var errors: [String] = []
                 for (index, source) in sources.enumerated() {
-                    do {
-                        let frame = try await source.withFile(format: format) { url, move in
-                            try autoreleasepool { try Self.copyFrame(from: url, move: move, to: project, repository: repo, pipeline: pipeline) }
+                    if Task.isCancelled { break }
+                    let update: @Sendable (Double, String) -> Void = { fraction, stage in
+                        Task { @MainActor in
+                            guard self.activeImportID == importID else { return }
+                            self.progress = max(self.progress, (Double(index) + min(1, max(0, fraction))) / Double(sources.count))
+                            self.status = "第 \(index + 1) / \(sources.count) 张 · \(stage) · 请保持屏幕解锁"
                         }
-                        frames.append(frame)
+                    }
+                    do {
+                        let frame = try await source.withFile(format: format, progress: { fraction, stage in
+                            update(fraction * 0.82, stage)
+                        }) { url, move in
+                            try autoreleasepool { try Self.copyFrame(from: url, move: move, to: project,
+                                                                      repository: repo, pipeline: pipeline,
+                                                                      progress: { fraction, stage in update(0.82 + fraction * 0.18, stage) }) }
+                        }
+                        do {
+                            try await MainActor.run {
+                                guard let i = self.projects.firstIndex(where: { $0.id == project.id }) else {
+                                    throw AstroError.message("工程已不可用")
+                                }
+                                var committed = self.projects[i]
+                                committed.frames.append(frame); committed.updated = .now
+                                try repo.save(committed)
+                                self.projects[i] = committed
+                            }
+                            imported += 1
+                        } catch {
+                            try? FileManager.default.removeItem(at: repo.url(project, frame.fileName))
+                            try? FileManager.default.removeItem(at: repo.url(project, "Thumbs/\(frame.id.uuidString).jpg"))
+                            try? FileManager.default.removeItem(at: repo.url(project, "Thumbs/\(frame.id.uuidString).preview.jpg"))
+                            throw error
+                        }
                     } catch {
                         errors.append("\(source.displayName(at: index))：\(error.localizedDescription)")
                     }
                     await MainActor.run { self.progress = Double(index + 1) / Double(sources.count) }
                 }
-                return (frames, errors)
-            }.value
-            defer { busy = false }
-            do {
-                guard let index = projects.firstIndex(where: { $0.id == project.id }) else {
-                    throw AstroError.message("工程已不可用")
-                }
-                if !result.0.isEmpty {
-                    var committed = projects[index]
-                    committed.frames.append(contentsOf: result.0)
-                    committed.updated = .now
-                    try repo.save(committed)
-                    projects[index] = committed
-                    if selectedID == project.id { requestPreview() }
-                }
-                if !result.1.isEmpty {
-                    let details = result.1.prefix(4).joined(separator: "\n")
-                    let remaining = result.1.count > 4 ? "\n另有 \(result.1.count - 4) 张导入失败。" : ""
-                    message = "已导入 \(result.0.count) 张，失败 \(result.1.count) 张。\n\(details)\(remaining)"
-                }
-            } catch {
-                for frame in result.0 {
-                    try? FileManager.default.removeItem(at: repo.url(project, frame.fileName))
-                    try? FileManager.default.removeItem(at: repo.url(project, "Thumbs/\(frame.id.uuidString).jpg"))
-                }
-                message = "保存导入结果失败：\(error.localizedDescription)"
+                return (imported, errors)
+            }
+            importWorker = worker
+            let result = await worker.value
+            activeImportID = nil; importWorker = nil; canCancel = false; busy = false
+            UIApplication.shared.isIdleTimerDisabled = false
+            if backgroundID != .invalid { UIApplication.shared.endBackgroundTask(backgroundID) }
+            if selectedID == project.id && result.0 > 0 { requestPreview() }
+            let remaining = max(0, sources.count - result.0 - result.1.count)
+            status = "已导入 \(result.0) 张" + (remaining > 0 ? "，剩余 \(remaining) 张未处理" : "")
+            if !result.1.isEmpty || remaining > 0 {
+                let details = result.1.prefix(4).joined(separator: "\n")
+                message = "已保存 \(result.0) 张，失败 \(result.1.count) 张，未处理 \(remaining) 张。" +
+                          (details.isEmpty ? "" : "\n\(details)")
             }
         }
     }
-    nonisolated private static func copyFrame(from url: URL, move: Bool, to project: AstroProject, repository: ProjectRepository, pipeline: ImagePipeline) throws -> FrameRecord {
+    nonisolated private static func copyFrame(from url: URL, move: Bool, to project: AstroProject,
+                                              repository: ProjectRepository, pipeline: ImagePipeline,
+                                              progress: @escaping @Sendable (Double, String) -> Void) throws -> FrameRecord {
         let suffix = url.pathExtension.lowercased()
         let fileName = UUID().uuidString + (suffix.isEmpty ? "" : ".\(suffix)")
         let name = "Originals/\(fileName)"
         let destination = repository.url(project, name)
         let files = FileManager.default
         try files.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+        var thumbnail: URL?
+        var largePreview: URL?
         do {
+            progress(0.83, "保存照片原件")
             if move { try files.moveItem(at: url, to: destination) }
             else { try files.copyItem(at: url, to: destination) }
-            let decoded = try pipeline.decode(destination)
-            let frame = pipeline.metadata(destination, image: decoded, name: url.lastPathComponent, stored: name)
-            let image = try pipeline.preview(image: decoded, adjustments: .neutral, maxSide: 256)
+            let isRaw = StackSelection.rawExtensions.contains(suffix)
+            progress(0.89, isRaw ? "读取 NEF 元数据" : "读取照片元数据")
+            var frame: FrameRecord
+            let image: CGImage
+            if isRaw {
+                frame = try pipeline.rawMetadata(destination, name: url.lastPathComponent, stored: name)
+                progress(0.94, "提取 NEF 内嵌预览（不解码全尺寸 RAW）")
+                let embedded = pipeline.embeddedRAWPreview(destination)
+                frame.rawPreviewUnavailable = embedded == nil
+                if let embedded { image = embedded }
+                else { image = try pipeline.rawPreviewPlaceholder() }
+                let preview = repository.url(project, "Thumbs/\(frame.id.uuidString).preview.jpg")
+                largePreview = preview
+                try files.createDirectory(at: preview.deletingLastPathComponent(), withIntermediateDirectories: true)
+                guard let data = UIImage(cgImage: image).jpegData(compressionQuality: 0.78) else {
+                    throw AstroError.message("无法保存 NEF 内嵌预览")
+                }
+                try data.write(to: preview, options: .atomic)
+            } else {
+                let decoded = try pipeline.decode(destination)
+                frame = pipeline.metadata(destination, image: decoded, name: url.lastPathComponent, stored: name)
+                image = try pipeline.preview(image: decoded, adjustments: .neutral, maxSide: 256)
+            }
             let thumb = repository.url(project, "Thumbs/\(frame.id.uuidString).jpg")
+            thumbnail = thumb
             try files.createDirectory(at: thumb.deletingLastPathComponent(), withIntermediateDirectories: true)
-            guard let data = UIImage(cgImage: image).jpegData(compressionQuality: 0.8) else {
+            let small: CGImage
+            if isRaw {
+                small = try pipeline.preview(image: CIImage(cgImage: image, options: [.colorSpace: pipeline.display]),
+                                             adjustments: .neutral, maxSide: 256)
+            } else {
+                small = image
+            }
+            guard let data = UIImage(cgImage: small).jpegData(compressionQuality: 0.8) else {
                 throw AstroError.message("无法生成缩略图")
             }
             try data.write(to: thumb, options: .atomic)
+            progress(1, "照片已导入")
             return frame
         } catch {
             try? files.removeItem(at: destination)
+            if let thumbnail { try? files.removeItem(at: thumbnail) }
+            if let largePreview { try? files.removeItem(at: largePreview) }
             throw error
         }
     }
@@ -337,7 +419,7 @@ final class AppStore: ObservableObject {
             if backgroundID != .invalid { UIApplication.shared.endBackgroundTask(backgroundID) }
         }
     }
-    func cancel() { cancelToken?.cancel(); status = "正在安全停止…" }
+    func cancel() { cancelToken?.cancel(); importWorker?.cancel(); status = "正在安全停止…" }
     func clearCache() {
         guard !busy, let repo = repository, let p = project else { return }
         do { try repo.clearCache(p); message = "解码缓存已清理。" } catch { message = error.localizedDescription }

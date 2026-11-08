@@ -90,6 +90,7 @@ struct FrameRecord: Identifiable, Codable, Sendable {
     var starCount: Int?
     var registrationRMS: Double?
     var rejection: String?
+    var rawPreviewUnavailable: Bool?
 }
 struct StackResult: Codable, Sendable {
     var fileName: String

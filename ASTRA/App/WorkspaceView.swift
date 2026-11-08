@@ -113,6 +113,10 @@ struct WorkspaceView: View {
         VStack(spacing: 8) {
             HStack { Text(store.status).font(.caption); Spacer(); if store.canCancel { Button("取消", action: store.cancel).font(.caption) } }
             if store.progress == 0 { ProgressView().frame(maxWidth: .infinity) } else { ProgressView(value: store.progress).tint(.mint) }
+            if store.status.contains("请保持屏幕解锁") {
+                Text("系统可能在锁屏后暂停相册读取；已完成的照片会逐张保存。")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
         }.padding(14).background(.white.opacity(0.05))
     }
     private func canvasHeader(_ project: AstroProject) -> some View {
@@ -121,6 +125,10 @@ struct WorkspaceView: View {
                 Text(project.result.map { "合成 · \($0.acceptedFrames) 帧" } ?? (project.frames.isEmpty ? "工作台" : "原片"))
                     .font(.caption.weight(.semibold)).foregroundStyle(EditorStyle.accent)
                 Text(info(project)).font(.caption2.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1)
+                if project.result == nil && project.frames.contains(where: { $0.rawPreviewUnavailable == true }) {
+                    Text("NEF 原件已保存；无内嵌预览的照片将在堆栈时完整解码。")
+                        .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                }
             }
             Spacer(minLength: 4)
             if !project.frames.isEmpty {
@@ -520,6 +528,9 @@ struct FramesView: View {
                         VStack(alignment: .leading, spacing: 5) {
                             Text(f.name).font(.subheadline).lineLimit(1)
                             Text("\(f.width) × \(f.height) · \(f.camera)").font(.caption2).foregroundStyle(.secondary)
+                            if f.rawPreviewUnavailable == true {
+                                Text("RAW 原件已保存 · 无内嵌预览").font(.caption2).foregroundStyle(.orange)
+                            }
                             if let stars = f.starCount { Text("\(stars) 星点" + (f.registrationRMS.map { String(format: " · RMS %.2f px", $0) } ?? "")).font(.caption2.monospacedDigit()).foregroundStyle(.mint) }
                             if let rejection = f.rejection { Text(rejection).font(.caption2).foregroundStyle(.orange) }
                         }
