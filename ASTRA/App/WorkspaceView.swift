@@ -363,7 +363,7 @@ struct WorkspaceView: View {
     }
 
     private func starChoices<Option: RawRepresentable & Hashable>(_ options: [Option], selected: Option,
-                       id: String, title: (Option) -> String, change: @escaping (Option) -> Void) -> some View
+                       id: String, title: @escaping (Option) -> String, change: @escaping (Option) -> Void) -> some View
                        where Option.RawValue == String {
         HStack(spacing: 6) {
             ForEach(options, id: \.self) { option in
