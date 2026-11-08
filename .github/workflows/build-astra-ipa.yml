@@ -29,6 +29,26 @@ jobs:
           xcodebuild -version
           mkdir -p Build
           xcodebuild -project ASTRA.xcodeproj -scheme ASTRA -configuration Debug -destination 'generic/platform=iOS Simulator' -derivedDataPath Build/Simulator CODE_SIGNING_ALLOWED=NO build 2>&1 | tee Build/simulator-build.log
+      - name: Verify RAW and JPEG selection rules
+        run: |
+          swiftc App/Models.swift App/StackSelection.swift Tests/SelectionTests.swift -o Build/selection-tests
+          Build/selection-tests
+      - name: Test core and archive arm64 device app
+        run: bash Scripts/build-unsigned.sh
+      - name: Validate IPA
+        run: |
+          unzip -t Build/ASTRA-unsigned.ipa
+          test "$(xcrun lipo -archs Build/ASTRA.xcarchive/Products/Applications/ASTRA.app/ASTRA)" = arm64
+          cat Build/ASTRA-unsigned.ipa.sha256
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: ASTRA-unsigned-IPA
+          path: |
+            ASTRA/Build/ASTRA-unsigned.ipa
+            ASTRA/Build/ASTRA-unsigned.ipa.sha256
+          if-no-files-found: error
+          retention-days: 14
       - name: Test stacking and editor gestures on iOS 27
         timeout-minutes: 13
         run: |
@@ -64,26 +84,6 @@ jobs:
           name: ASTRA-editor-qa
           path: ASTRA/Build/EditorQA/
           if-no-files-found: ignore
-      - name: Verify RAW and JPEG selection rules
-        run: |
-          swiftc App/Models.swift App/StackSelection.swift Tests/SelectionTests.swift -o Build/selection-tests
-          Build/selection-tests
-      - name: Test core and archive arm64 device app
-        run: bash Scripts/build-unsigned.sh
-      - name: Validate IPA
-        run: |
-          unzip -t Build/ASTRA-unsigned.ipa
-          test "$(xcrun lipo -archs Build/ASTRA.xcarchive/Products/Applications/ASTRA.app/ASTRA)" = arm64
-          cat Build/ASTRA-unsigned.ipa.sha256
-      - name: Upload IPA
-        uses: actions/upload-artifact@v4
-        with:
-          name: ASTRA-unsigned-IPA
-          path: |
-            ASTRA/Build/ASTRA-unsigned.ipa
-            ASTRA/Build/ASTRA-unsigned.ipa.sha256
-          if-no-files-found: error
-          retention-days: 14
       - name: Upload build logs
         if: always()
         uses: actions/upload-artifact@v4
