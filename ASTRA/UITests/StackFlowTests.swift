@@ -65,10 +65,14 @@ final class StackFlowTests: XCTestCase {
         XCTAssertFalse(app.alerts["ASTRA"].exists, "星云处理内核必须实际运行")
         XCTAssertTrue(app.buttons["导出照片"].isEnabled)
         app.buttons["导出照片"].tap()
-        XCTAssertTrue(app.buttons["export-to-photos"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["导出成片"].waitForExistence(timeout: 5))
         let match = app.switches["export-match-preview"]
-        XCTAssertTrue(match.exists)
+        for _ in 0..<3 where !match.exists { app.swipeUp() }
+        XCTAssertTrue(match.waitForExistence(timeout: 5))
         XCTAssertEqual(match.value as? String, "1", "成片默认应与预览一致")
+        let album = app.buttons["export-to-photos"]
+        for _ in 0..<3 where !album.exists { app.swipeUp() }
+        XCTAssertTrue(album.waitForExistence(timeout: 5))
     }
 
     @MainActor
