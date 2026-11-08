@@ -175,6 +175,7 @@ final class AppStore: ObservableObject {
                 suggested.dehazeStrength = p.adjustments.dehazeStrength
                 suggested.nebulaColorRecovery = p.adjustments.nebulaColorRecovery ?? 0.45
                 suggested.starSpikeStyle = p.adjustments.starSpikeStyle
+                suggested.starSpikeDensity = p.adjustments.starSpikeDensity
                 suggested.starSpikeStrength = p.adjustments.starSpikeStrength
                 guard selectedID == p.id else { busy = false; return }
                 busy = false; status = ""; progress = 1

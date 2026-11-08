@@ -277,13 +277,15 @@ struct WorkspaceView: View {
                         .frame(maxWidth: .infinity, minHeight: 35)
                         .background(EditorStyle.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 11))
                 }.buttonStyle(.plain).accessibilityIdentifier("auto-develop")
-                astroSlider("去灰强度", key: \.dehazeStrength, range: 0...2, initial: 1, id: "dehaze-strength")
-                    .disabled(!p.usesScreenStretch || p.adjustments.adaptiveShadowKnee == nil)
+                ParameterInspector(parameters: [
+                    percentParameter("去灰强度", "moon.stars", key: \.dehazeStrength, range: 0...200, initial: 100,
+                                     enabled: p.usesScreenStretch && p.adjustments.adaptiveShadowKnee != nil),
+                    percentParameter("云气色彩", "drop.halffull", key: \.nebulaColorRecovery, range: 0...100, initial: 0,
+                                     enabled: p.usesScreenStretch)
+                ], checkpoint: store.checkpoint)
                 if p.adjustments.adaptiveShadowKnee == nil {
                     Text("先点智能显影分析灰底，再调去灰强度。").font(.caption2).foregroundStyle(.secondary)
                 }
-                astroSlider("云气色彩", key: \.nebulaColorRecovery, range: 0...1, initial: 0, id: "nebula-color-recovery")
-                    .disabled(!p.usesScreenStretch)
                 starSpikeControls(p)
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 3), spacing: 6) {
                     ForEach(DevelopMethod.allCases) { method in
@@ -328,44 +330,51 @@ struct WorkspaceView: View {
         }
     }
 
-    private func astroSlider(_ title: String, key: WritableKeyPath<Adjustments, Double?>,
-                             range: ClosedRange<Double>, initial: Double, id: String) -> some View {
-        let current = store.project?.adjustments[keyPath: key] ?? initial
-        return VStack(alignment: .leading, spacing: 2) {
-            HStack {
-                Text(title)
-                Spacer()
-                Text("\(Int((current * 100).rounded()))%").monospacedDigit().foregroundStyle(.secondary)
-            }.font(.caption.weight(.medium))
-            Slider(value: Binding(get: { store.project?.adjustments[keyPath: key] ?? initial }, set: { value in
-                store.update({ $0.adjustments[keyPath: key] = value }, render: true)
-            }), in: range, step: 0.01, onEditingChanged: { editing in
-                if editing { store.checkpoint() }
-            })
-            .tint(EditorStyle.accent)
-            .accessibilityLabel(title)
-            .accessibilityIdentifier(id)
-        }
+    private func percentParameter(_ title: String, _ symbol: String, key: WritableKeyPath<Adjustments, Double?>,
+                                  range: ClosedRange<Double>, initial: Double, enabled: Bool = true) -> EditorParameter {
+        let value = Binding(get: { (store.project?.adjustments[keyPath: key] ?? initial / 100) * 100 }, set: { value in
+            store.update({ $0.adjustments[keyPath: key] = value / 100 }, render: true)
+        })
+        return EditorParameter(title: title, symbol: symbol, value: value, range: range, neutral: initial,
+                               step: 5, precision: 0, unit: "%", enabled: enabled)
     }
 
     private func starSpikeControls(_ project: AstroProject) -> some View {
         let style = project.adjustments.starSpikeStyle ?? .off
-        return VStack(alignment: .leading, spacing: 5) {
-            HStack {
-                Text("星芒").font(.caption.weight(.medium))
-                Picker("星芒", selection: Binding(get: { store.project?.adjustments.starSpikeStyle ?? .off }, set: { value in
-                    store.checkpoint()
-                    store.update({ $0.adjustments.starSpikeStyle = value }, render: true)
-                })) {
-                    ForEach(StarSpikeStyle.allCases, id: \.self) { option in
-                        Text(option.title).tag(option)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .accessibilityIdentifier("star-spike-style")
+        let density = project.adjustments.starSpikeDensity ?? .sparse
+        return VStack(alignment: .leading, spacing: 7) {
+            Text("星芒").font(.caption2.weight(.semibold)).foregroundStyle(EditorStyle.accent)
+            starChoices(StarSpikeStyle.allCases, selected: style, id: "spike-style", title: { $0.title }) { value in
+                store.checkpoint()
+                store.update({ $0.adjustments.starSpikeStyle = value }, render: true)
             }
             if style != .off {
-                astroSlider("星芒强度", key: \.starSpikeStrength, range: 0...1, initial: 0.38, id: "star-spike-strength")
+                Text("星芒密度").font(.caption2.weight(.semibold)).foregroundStyle(EditorStyle.accent)
+                starChoices(StarSpikeDensity.allCases, selected: density, id: "spike-density", title: { $0.title }) { value in
+                    store.checkpoint()
+                    store.update({ $0.adjustments.starSpikeDensity = value }, render: true)
+                }
+                let strength = percentParameter("星芒强度", "sparkle", key: \.starSpikeStrength, range: 0...100, initial: 38)
+                PrecisionRuler(title: strength.title, value: strength.value, range: strength.range,
+                               neutral: strength.neutral, step: strength.step, precision: strength.precision,
+                               unit: strength.unit, checkpoint: store.checkpoint)
+            }
+        }
+    }
+
+    private func starChoices<Option: RawRepresentable & Hashable>(_ options: [Option], selected: Option,
+                       id: String, title: (Option) -> String, change: @escaping (Option) -> Void) -> some View
+                       where Option.RawValue == String {
+        HStack(spacing: 6) {
+            ForEach(options, id: \.self) { option in
+                Button { change(option) } label: {
+                    Text(title(option)).font(.caption.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 39)
+                        .editorCard(selected: option == selected)
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(option == selected ? .isSelected : [])
+                .accessibilityIdentifier("\(id)-\(option.rawValue)")
             }
         }
     }

@@ -36,16 +36,16 @@ enum AstroProcessing {
         try CIColorKernel(functionName: "astroSpikeComposite", fromMetalLibraryData: library.get())
     }
 
-    static func addStarSpikes(_ image: CIImage, adjustments: Adjustments) throws -> CIImage {
+    static func addStarSpikes(_ image: CIImage, selection: CIImage?, adjustments: Adjustments) throws -> CIImage {
         let style = adjustments.starSpikeStyle ?? .off
         let strength = min(1, max(0, adjustments.starSpikeStrength ?? 0.38))
-        guard style != .off, strength > 0 else { return image }
+        guard style != .off, strength > 0, let selection else { return image }
         let extent = image.extent
         let size = max(extent.width, extent.height)
         let broad = image.clampedToExtent()
             .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: max(1.1, size * 0.0025)])
             .cropped(to: extent)
-        guard let seeds = try spikeSeeds.get().apply(extent: extent, arguments: [image, broad]) else {
+        guard let seeds = try spikeSeeds.get().apply(extent: extent, arguments: [image, broad, selection]) else {
             throw AstroError.message("星芒亮星检测失败")
         }
         let quarterTurn = Double.pi / 4

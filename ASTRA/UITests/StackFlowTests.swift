@@ -91,18 +91,25 @@ final class StackFlowTests: XCTestCase {
             Thread.sleep(forTimeInterval: 0.25)
         }
         XCTAssertTrue(changed, "星云参数应改变真实预览像素")
-        let strength = app.sliders["dehaze-strength"]
-        XCTAssertTrue(strength.isEnabled)
+        let decrease = app.buttons["减小去灰强度"]
+        XCTAssertTrue(decrease.isHittable && decrease.isEnabled)
         let automatic = canvas.screenshot().image.pngData()
-        strength.adjust(toNormalizedSliderPosition: 0)
-        XCTAssertTrue(previewChanged(canvas, from: automatic), "去灰强度必须改变真实预览像素")
+        decrease.tap()
+        XCTAssertTrue(previewChanged(canvas, from: automatic), "去灰刻度尺必须改变真实预览像素")
         let noSpikes = canvas.screenshot().image.pngData()
-        let four = app.buttons["四芒"]
+        let four = app.buttons["spike-style-four"]
         let inspector = app.scrollViews["editor-inspector"]
         for _ in 0..<3 where !four.isHittable { inspector.swipeUp(velocity: .slow) }
         four.tap()
         XCTAssertTrue(previewChanged(canvas, from: noSpikes), "星芒必须改变真实预览像素")
-        app.buttons["关闭"].tap()
+        let sparse = canvas.screenshot().image.pngData()
+        let dense = app.buttons["spike-density-dense"]
+        for _ in 0..<3 where !dense.isHittable { inspector.swipeUp(velocity: .slow) }
+        dense.tap()
+        XCTAssertTrue(previewChanged(canvas, from: sparse), "较多应让更多星点产生星芒")
+        let off = app.buttons["spike-style-off"]
+        for _ in 0..<3 where !off.isHittable { inspector.swipeDown(velocity: .slow) }
+        off.tap()
         var spikesRemoved = false
         for _ in 0..<25 {
             if canvas.screenshot().image.pngData() == noSpikes { spikesRemoved = true; break }

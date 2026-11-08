@@ -13,6 +13,14 @@ enum EditorStyle {
     }
 }
 
+extension View {
+    func editorCard(selected: Bool, tint: Color = EditorStyle.accent) -> some View {
+        foregroundStyle(selected ? tint : .secondary)
+            .background(selected ? tint.opacity(0.12) : EditorStyle.surface, in: RoundedRectangle(cornerRadius: 11))
+            .overlay(RoundedRectangle(cornerRadius: 11).strokeBorder(selected ? tint.opacity(0.32) : EditorStyle.line))
+    }
+}
+
 struct PrecisionRuler: View {
     let title: String
     @Binding var value: Double
@@ -137,6 +145,7 @@ struct EditorParameter: Identifiable {
     var step = 0.01
     var precision = 2
     var unit = ""
+    var enabled = true
     var id: String { title }
 }
 
@@ -156,14 +165,12 @@ struct ParameterInspector: View {
                         VStack(alignment: .leading, spacing: 5) {
                             Label(item.title, systemImage: item.symbol)
                                 .font(.caption2.weight(.medium)).lineLimit(1)
-                            Text(EditorStyle.number(item.value.wrappedValue, precision: item.precision))
+                            Text(EditorStyle.number(item.value.wrappedValue, precision: item.precision) + item.unit)
                                 .font(.system(.caption, design: .monospaced).weight(.semibold))
                         }
                         .frame(maxWidth: .infinity, minHeight: 39, alignment: .leading)
                         .padding(.horizontal, 9).padding(.vertical, 3)
-                        .foregroundStyle(index == number ? tint : .secondary)
-                        .background(index == number ? tint.opacity(0.12) : EditorStyle.surface, in: RoundedRectangle(cornerRadius: 11))
-                        .overlay(RoundedRectangle(cornerRadius: 11).strokeBorder(index == number ? tint.opacity(0.32) : EditorStyle.line))
+                        .editorCard(selected: index == number, tint: tint)
                     }.buttonStyle(.plain)
                         .accessibilityAddTraits(index == number ? .isSelected : [])
                         .accessibilityIdentifier("parameter-\(number)")
@@ -171,7 +178,7 @@ struct ParameterInspector: View {
             }
             PrecisionRuler(title: parameter.title, value: parameter.value, range: parameter.range, neutral: parameter.neutral,
                            step: parameter.step, precision: parameter.precision, unit: parameter.unit, tint: tint,
-                           checkpoint: checkpoint).id(parameter.id)
+                           checkpoint: checkpoint).disabled(!parameter.enabled).id(parameter.id)
         }
     }
 }

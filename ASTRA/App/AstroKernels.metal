@@ -114,13 +114,14 @@ using namespace metal;
 }
 
 
-[[stitchable]] float4 astroSpikeSeeds(coreimage::sample_t source, coreimage::sample_t broad) {
+[[stitchable]] float4 astroSpikeSeeds(coreimage::sample_t source, coreimage::sample_t broad,
+                                   coreimage::sample_t selected) {
     const float3 weights = float3(0.2126, 0.7152, 0.0722);
     const float l = dot(source.rgb, weights);
     const float local = dot(broad.rgb, weights);
-    const float bright = smoothstep(0.30, 0.72, l);
+    const float bright = smoothstep(0.08, 0.42, l);
     const float compact = smoothstep(0.30, 0.78, (l - local) / max(l, 0.00001));
-    return float4(clamp(source.rgb, 0.0, 1.0) * bright * compact, source.a);
+    return float4(clamp(source.rgb, 0.0, 1.0) * bright * compact * selected.r, source.a);
 }
 
 [[stitchable]] float4 astroSpikeComposite(coreimage::sample_t source, coreimage::sample_t rays, float gain) {

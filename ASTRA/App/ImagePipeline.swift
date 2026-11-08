@@ -10,6 +10,9 @@ final class ImagePipeline {
     let linear = CGColorSpace(name: CGColorSpace.extendedLinearSRGB)!
     let display = CGColorSpace(name: CGColorSpace.sRGB)!
     let context: CIContext
+    private weak var spikeSource: CIImage?
+    private var spikeStars: [[NSNumber]] = []
+    private var spikeSize = CGSize.zero
     // Core Image bitmap row order is independent of its bottom-left coordinate space.
     // Normalize both pixel formats so that proxy analysis and tiled caches share one grid.
     private lazy var floatRowsTopFirst = renderRowsTopFirst(.RGBAf)
@@ -265,15 +268,17 @@ final class ImagePipeline {
         let s = min(1, Double(maxSide) / max(image.extent.width, image.extent.height))
         let resized = image.transformed(by: CGAffineTransform(scaleX: s, y: s))
         let sharedProfile = profile ?? astroProfile(resized)
-        let shown = try adjusted(image: resized, adjustments: adjustments, profile: sharedProfile, screenSTF: autoSTF)
+        let shown = try adjusted(image: resized, starSource: image, adjustments: adjustments,
+                                 profile: sharedProfile, screenSTF: autoSTF)
         guard let cg = context.createCGImage(shown, from: shown.extent, format: .RGBA8, colorSpace: display) else { throw AstroError.message("预览渲染失败") }
         return cg
     }
-    private func adjusted(image: CIImage, adjustments: Adjustments, profile: AstroProfile,
+    private func adjusted(image: CIImage, starSource: CIImage, adjustments: Adjustments, profile: AstroProfile,
                           screenSTF: Bool) throws -> CIImage {
         let edited = try edit(image, adjustments, profile: profile)
         let shown = screenSTF ? try AstroProcessing.screenStretch(edited, profile: profile, adjustments: adjustments) : edited
-        return try AstroProcessing.addStarSpikes(shown, adjustments: adjustments)
+        let selection = starSpikeSelection(source: starSource, extent: shown.extent, adjustments: adjustments)
+        return try AstroProcessing.addStarSpikes(shown, selection: selection, adjustments: adjustments)
     }
     func export(image: CIImage, adjustments: Adjustments, kind: ExportKind, url: URL,
                 screenSTF: Bool = false) throws {
@@ -282,8 +287,10 @@ final class ImagePipeline {
             return
         }
         // Reproduce the profile used by PreviewWorker's 1600 px RGBAh source.
-        let profile = astroProfile(try previewSource(image))
-        let im = try adjusted(image: image, adjustments: adjustments, profile: profile, screenSTF: screenSTF)
+        let workImage = try previewSource(image)
+        let profile = astroProfile(workImage)
+        let im = try adjusted(image: image, starSource: workImage, adjustments: adjustments,
+                              profile: profile, screenSTF: screenSTF)
         switch kind {
         case .tiff: try context.writeTIFFRepresentation(of: im, to: url, format: .RGBA16, colorSpace: display, options: [:])
         case .png: try context.writePNGRepresentation(of: im, to: url, format: .RGBA16, colorSpace: display, options: [:])
@@ -292,6 +299,40 @@ final class ImagePipeline {
         case .exr: break
         }
     }
+    private func starSpikeSelection(source: CIImage, extent: CGRect, adjustments: Adjustments) -> CIImage? {
+        guard (adjustments.starSpikeStyle ?? .off) != .off,
+              (adjustments.starSpikeStrength ?? 0.38) > 0 else { return nil }
+        if spikeSource !== source {
+            let sample = proxy(source)
+            let analysis = AstroBridge.analyze(pixels: sample.data, width: sample.width,
+                                               height: sample.height, skyFraction: 1)
+            // The detector returns compact stars in descending flux order.
+            spikeStars = analysis["stars"] as? [[NSNumber]] ?? []
+            spikeSize = CGSize(width: sample.width, height: sample.height)
+            spikeSource = source
+        }
+        let density = adjustments.starSpikeDensity ?? .sparse
+        let count = density.starLimit(detected: spikeStars.count)
+        guard count > 0,
+              let mask = CGContext(data: nil, width: Int(spikeSize.width), height: Int(spikeSize.height),
+                                   bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceGray(),
+                                   bitmapInfo: CGImageAlphaInfo.none.rawValue) else { return nil }
+        mask.setFillColor(gray: 0, alpha: 1)
+        mask.fill(CGRect(origin: .zero, size: spikeSize))
+        mask.setFillColor(gray: 1, alpha: 1)
+        for star in spikeStars.prefix(count) where star.count >= 4 {
+            let x = star[0].doubleValue + 0.5
+            let y = star[1].doubleValue + 0.5
+            let radius = min(4.5, max(2.75, 1.5 * star[3].doubleValue))
+            mask.fillEllipse(in: CGRect(x: x - radius, y: y - radius, width: 2*radius, height: 2*radius))
+        }
+        guard let bitmap = mask.makeImage() else { return nil }
+        return CIImage(cgImage: bitmap)
+            .transformed(by: CGAffineTransform(scaleX: extent.width / spikeSize.width,
+                                               y: extent.height / spikeSize.height))
+            .transformed(by: CGAffineTransform(translationX: extent.minX, y: extent.minY))
+    }
+
     private func colorCube(_ bands: [HSLBand], grading: ColorGrading?) -> Data {
         let dim = 24; var cube = [Float](); cube.reserveCapacity(dim * dim * dim * 4)
         let shifts = GradeRange.allCases.map { range -> [Double] in

@@ -4,6 +4,11 @@ import Foundation
 enum AutoDevelopTests {
     static func main() throws {
         verifySkyModel()
+        for count in 2...160 {
+            let limits = StarSpikeDensity.allCases.map { $0.starLimit(detected: count) }
+            precondition(limits == limits.sorted() && limits.allSatisfy { $0 > 0 && $0 < count })
+        }
+        precondition(StarSpikeDensity.allCases.map { $0.starLimit(detected: 40) } == [4, 10, 20])
         let w = 256, h = 192
         var pixels = [Float](repeating: 0, count: w*h*4)
         for y in 0..<h { for x in 0..<w {

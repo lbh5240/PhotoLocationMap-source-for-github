@@ -77,6 +77,30 @@ enum StarSpikeStyle: String, Codable, CaseIterable, Sendable {
     }
 }
 
+enum StarSpikeDensity: String, Codable, CaseIterable, Sendable {
+    case sparse, balanced, dense
+
+    var title: String {
+        switch self {
+        case .sparse: "少量"
+        case .balanced: "适中"
+        case .dense: "较多"
+        }
+    }
+
+    func starLimit(detected: Int) -> Int {
+        guard detected > 1 else { return max(0, detected) }
+        let fraction: Double
+        let cap: Int
+        switch self {
+        case .sparse: (fraction, cap) = (0.15, 4)
+        case .balanced: (fraction, cap) = (0.30, 10)
+        case .dense: (fraction, cap) = (0.50, 20)
+        }
+        return min(detected - 1, cap, Int(ceil(Double(detected) * fraction)))
+    }
+}
+
 struct Adjustments: Codable, Equatable, Sendable {
     var exposure: Double = 0
     var contrast: Double = 1
@@ -106,6 +130,7 @@ struct Adjustments: Codable, Equatable, Sendable {
     var dehazeStrength: Double?
     var nebulaColorRecovery: Double?
     var starSpikeStyle: StarSpikeStyle?
+    var starSpikeDensity: StarSpikeDensity?
     var starSpikeStrength: Double?
     var nebulaContrast: Double?
     var starProtection: Double?
