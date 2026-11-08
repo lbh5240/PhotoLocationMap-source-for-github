@@ -42,7 +42,7 @@ private actor PreviewWorker {
             if key != url || proxy == nil || before == nil {
                 let source: CIImage
                 if let result = project.result {
-                    source = try pipeline.master(result, repository: repository, project: project)
+                    source = pipeline.finishedStackView(try pipeline.master(result, repository: repository, project: project))
                 } else if StackSelection.rawExtensions.contains(url.pathExtension.lowercased()) {
                     let frame = project.frames.first { $0.fileName == url.lastPathComponent || repository.url(project, $0.fileName) == url }
                     let thumbnail = frame.map { repository.url(project, "Thumbs/\($0.id.uuidString).preview.jpg") }
@@ -149,12 +149,18 @@ final class AppStore: ObservableObject {
     func undo() { update({ p in guard let prev = p.undo.popLast() else { return }; p.redo.append(p.adjustments); p.adjustments = prev }, render: true) }
     func redo() { update({ p in guard let next = p.redo.popLast() else { return }; p.undo.append(p.adjustments); p.adjustments = next }, render: true) }
     func reset() { checkpoint(); update({ $0.adjustments = .neutral }, render: true) }
-    func autoDevelop() {
+    func chooseDevelopMethod(_ method: DevelopMethod) {
+        guard !busy else { return }
+        checkpoint()
+        update({ $0.adjustments.developMethod = method }, render: true)
+    }
+    func autoDevelop(method: DevelopMethod? = nil) {
         guard !busy, let p = project, !p.frames.isEmpty, let repo = repository else { return }
         busy = true; status = "分析星空亮度与背景"; progress = 0
         Task {
             do {
-                let suggested = try await previewWorker.suggest(project: p, repository: repo)
+                var suggested = try await previewWorker.suggest(project: p, repository: repo)
+                suggested.developMethod = method ?? p.adjustments.developMethod ?? .natural
                 guard selectedID == p.id else { busy = false; return }
                 busy = false; status = ""; progress = 1
                 checkpoint()
@@ -462,7 +468,10 @@ final class AppStore: ObservableObject {
             do {
                 let url = try await Task.detached(priority: .userInitiated) {
                     let pipeline = ImagePipeline(), source: CIImage
-                    if let result = p.result { source = try pipeline.master(result, repository: repo, project: p) }
+                    if let result = p.result {
+                        let master = try pipeline.master(result, repository: repo, project: p)
+                        source = kind == .exr ? master : pipeline.finishedStackView(master)
+                    }
                     else { source = try pipeline.decode(repo.url(p, (p.frames.first(where: { $0.id == p.configuration.referenceFrameID }) ?? p.frames[0]).fileName)) }
                     let output = repo.url(p, "Exports/ASTRA-\(UUID().uuidString.prefix(8)).\(kind.ext)")
                     try FileManager.default.createDirectory(at: output.deletingLastPathComponent(), withIntermediateDirectories: true)

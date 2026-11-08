@@ -57,7 +57,8 @@ enum AstroProcessing {
         let green = Float(adjustments.autoBlackGreen ?? Double(black))
         let blue = Float(adjustments.autoBlackBlue ?? Double(black))
         guard let result = try stfKernel.get().apply(extent: image.extent,
-            arguments: [image, red, green, blue, max(white, black + 0.005)]) else {
+            arguments: [image, red, green, blue, max(white, black + 0.005),
+                        Float(adjustments.developMethod?.rawValue ?? 0)]) else {
             throw AstroError.message("STF 预览渲染失败，请重试")
         }
         return result

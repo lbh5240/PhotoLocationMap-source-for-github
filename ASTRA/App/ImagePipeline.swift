@@ -191,6 +191,15 @@ final class ImagePipeline {
         let image = CIImage(bitmapData: data, bytesPerRow: result.width * 16, size: CGSize(width: result.width, height: result.height), format: .RGBAf, colorSpace: linear)
         return result.bottomFirst == true && bitmapRowsTopFirst ? image.oriented(.downMirrored) : image
     }
+    // Registration leaves incomplete coverage at the outer canvas. Keep the Float32
+    // master untouched; trim only the developed view and its matching export.
+    func finishedStackView(_ image: CIImage) -> CIImage {
+        let e = image.extent.integral
+        let dx = max(2, floor(e.width * 0.015)), dy = max(2, floor(e.height * 0.015))
+        guard e.width > 4*dx, e.height > 4*dy else { return image }
+        let region = e.insetBy(dx: dx, dy: dy).integral
+        return image.cropped(to: region).transformed(by: CGAffineTransform(translationX: -region.minX, y: -region.minY))
+    }
     func astroProfile(_ image: CIImage) -> AstroProfile {
         let sample = proxy(image, maxSide: 256)
         return AstroProcessing.profile(sample.data, width: sample.width, height: sample.height,
@@ -208,7 +217,9 @@ final class ImagePipeline {
         if a.shadows != 0 || a.highlights != 1 { im = im.applyingFilter("CIHighlightShadowAdjust", parameters: ["inputShadowAmount": a.shadows, "inputHighlightAmount": a.highlights]) }
         if a.contrast != 1 || a.saturation != 1 { im = im.applyingFilter("CIColorControls", parameters: [kCIInputContrastKey: a.contrast, kCIInputSaturationKey: a.saturation]) }
         if a.vibrance != 0 { im = im.applyingFilter("CIVibrance", parameters: ["inputAmount": a.vibrance]) }
-        im = im.applyingFilter("CIToneCurve", parameters: ["inputPoint0": CIVector(x: 0, y: a.black), "inputPoint1": CIVector(x: 0.25, y: a.curveLow), "inputPoint2": CIVector(x: 0.5, y: a.curveMid), "inputPoint3": CIVector(x: 0.75, y: a.curveHigh), "inputPoint4": CIVector(x: 1, y: 1)])
+        if a.black != 0 || a.curveLow != 0.25 || a.curveMid != 0.5 || a.curveHigh != 0.75 {
+            im = im.applyingFilter("CIToneCurve", parameters: ["inputPoint0": CIVector(x: 0, y: a.black), "inputPoint1": CIVector(x: 0.25, y: a.curveLow), "inputPoint2": CIVector(x: 0.5, y: a.curveMid), "inputPoint3": CIVector(x: 0.75, y: a.curveHigh), "inputPoint4": CIVector(x: 1, y: 1)])
+        }
         if a.hsl.contains(where: { $0 != HSLBand() }) || (a.colorGrading ?? ColorGrading()) != ColorGrading() {
             im = im.applyingFilter("CIColorCubeWithColorSpace", parameters: ["inputCubeDimension": 24,
                 "inputCubeData": colorCube(a.hsl, grading: a.colorGrading), "inputColorSpace": display])

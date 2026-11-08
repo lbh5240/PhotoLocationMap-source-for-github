@@ -59,9 +59,30 @@ final class StackFlowTests: XCTestCase {
             Thread.sleep(forTimeInterval: 0.25)
         }
         XCTAssertTrue(changed, "星云参数应改变真实预览像素")
+        let natural = canvas.screenshot().image.pngData()
+        XCTAssertTrue(app.buttons["develop-method-1"].exists)
+        app.buttons["develop-method-1"].tap()
+        var coreChanged = false
+        for _ in 0..<20 {
+            if canvas.screenshot().image.pngData() != natural { coreChanged = true; break }
+            Thread.sleep(forTimeInterval: 0.2)
+        }
+        XCTAssertTrue(coreChanged, "亮核算法必须改变真实预览像素")
+        let coreImage = canvas.screenshot().image.pngData()
+        XCTAssertTrue(app.buttons["develop-method-2"].exists)
+        app.buttons["develop-method-2"].tap()
+        var gasChanged = false
+        for _ in 0..<20 {
+            if canvas.screenshot().image.pngData() != coreImage { gasChanged = true; break }
+            Thread.sleep(forTimeInterval: 0.2)
+        }
+        XCTAssertTrue(gasChanged, "云气算法必须改变真实预览像素")
         XCTAssertTrue(app.staticTexts["Arcsinh 拉伸"].exists)
         app.buttons["增大Arcsinh 拉伸"].tap()
         XCTAssertTrue(app.staticTexts["ruler-value"].exists)
+        XCTAssertTrue(app.buttons["reset-adjustments"].exists)
+        app.buttons["reset-adjustments"].tap()
+        XCTAssertEqual(app.staticTexts["ruler-value"].label, "0.0")
         XCTAssertFalse(app.alerts["ASTRA"].exists, "星云处理内核必须实际运行")
         XCTAssertTrue(app.buttons["导出照片"].isEnabled)
         app.buttons["导出照片"].tap()

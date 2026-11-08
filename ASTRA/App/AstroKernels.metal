@@ -41,13 +41,24 @@ using namespace metal;
 }
 
 [[stitchable]] float4 astroSTF(coreimage::sample_t source, float blackR, float blackG,
-                              float blackB, float white) {
+                              float blackB, float white, float method) {
     float3 black = float3(blackR, blackG, blackB);
     float3 rgb = max(source.rgb - black, float3(0.0));
     float l = dot(rgb, float3(0.2126, 0.7152, 0.0722));
     float sky = dot(black, float3(0.2126, 0.7152, 0.0722));
-    float u = asinh(8.0 * l / max(white - sky, 0.00001)) / asinh(8.0);
-    // Continuous shoulder, no hard highlight clipping for bright M42 cores.
-    float mapped = 1.0 - exp(-1.7 * u);
-    return float4(rgb * (mapped / max(l, 0.000001)), source.a);
+    float x = l / max(white - sky, 0.00001);
+    float mapped;
+    if (method < 0.5) {
+        // Colour-preserving arcsinh with a continuous shoulder.
+        mapped = 1.0 - exp(-1.7 * asinh(8.0 * x) / asinh(8.0));
+    } else if (method < 1.5) {
+        // Logarithmic compression retains contrast in a bright nebular core.
+        mapped = 1.0 - exp(-1.1 * log(1.0 + 3.0 * x) / log(4.0));
+    } else {
+        // Rational hyperbolic lift puts more emphasis on faint outer gas.
+        mapped = 1.0 - exp(-2.0 * x / (x + 0.35));
+    }
+    float3 output = rgb * (mapped / max(l, 0.000001));
+    output /= max(1.0, max(output.r, max(output.g, output.b)));
+    return float4(output, source.a);
 }

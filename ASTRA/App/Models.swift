@@ -49,6 +49,16 @@ struct ColorGrading: Codable, Equatable, Sendable {
         set { switch range { case .shadows: shadows = newValue; case .midtones: midtones = newValue; case .highlights: highlights = newValue } }
     }
 }
+enum DevelopMethod: Int, Codable, CaseIterable, Identifiable, Sendable {
+    case natural, core, nebula
+    var id: Int { rawValue }
+    var title: String { switch self { case .natural: "自然"; case .core: "亮核"; case .nebula: "云气" } }
+    var detail: String { switch self {
+        case .natural: "Arcsinh 色彩保护与平滑肩部"
+        case .core: "对数亮部压缩，适合 M42 高亮核心"
+        case .nebula: "双曲线提升暗弱云气，注意噪声"
+    } }
+}
 struct Adjustments: Codable, Equatable, Sendable {
     var exposure: Double = 0
     var contrast: Double = 1
@@ -85,6 +95,7 @@ struct Adjustments: Codable, Equatable, Sendable {
     var autoBlackRed: Double?
     var autoBlackGreen: Double?
     var autoBlackBlue: Double?
+    var developMethod: DevelopMethod?
     static let neutral = Adjustments()
 }
 struct FrameRecord: Identifiable, Codable, Sendable {

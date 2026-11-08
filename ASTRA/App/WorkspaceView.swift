@@ -102,7 +102,10 @@ struct WorkspaceView: View {
         Button("从文件导入", systemImage: "folder") { importing = true }
     }
     private func info(_ p: AstroProject) -> String {
-        if let r = p.result { return "\(r.width) × \(r.height) · Float32" }
+        if let r = p.result {
+            let raw = p.frames.filter(\.included).allSatisfy { StackSelection.rawExtensions.contains(URL(fileURLWithPath: $0.fileName).pathExtension.lowercased()) }
+            return "\(r.width) × \(r.height) · \(raw ? "RAW 来源 · " : "")线性 Float32"
+        }
         guard let f = p.frames.first else { return "等待导入" }
         let resolution = String(format: "%.1f MP", Double(f.width*f.height)/1_000_000)
         return f.camera.isEmpty ? resolution : "\(f.camera) · \(resolution)"
@@ -189,6 +192,11 @@ struct WorkspaceView: View {
                 } else if !store.histogram.isEmpty && panel != .curves {
                     HistogramView(values: store.histogram, height: 22).frame(width: 80)
                 }
+                if panel != .stack {
+                    Button("恢复默认", action: store.reset).font(.caption2.weight(.medium))
+                        .foregroundStyle(EditorStyle.accent).disabled(store.busy)
+                        .accessibilityIdentifier("reset-adjustments")
+                }
             }.padding(.horizontal, 3).frame(minHeight: 24)
             ScrollView {
                 controls(project).padding(.horizontal, 2).padding(.vertical, 1).disabled(store.busy)
@@ -271,6 +279,21 @@ struct WorkspaceView: View {
                 }.buttonStyle(.plain).accessibilityIdentifier("auto-develop")
                 Text("分析每张照片的亮度、背景和偏色后计算参数；下方仍可逐项微调。")
                     .font(.caption2).foregroundStyle(.secondary)
+                HStack(spacing: 6) {
+                    ForEach(DevelopMethod.allCases) { method in
+                        Button(method.title) { store.chooseDevelopMethod(method) }
+                            .font(.caption.weight(.medium))
+                            .frame(maxWidth: .infinity, minHeight: 32)
+                            .background((p.adjustments.developMethod ?? .natural) == method ? EditorStyle.accent.opacity(0.22) : EditorStyle.surface,
+                                        in: RoundedRectangle(cornerRadius: 9))
+                            .accessibilityIdentifier("develop-method-\(method.rawValue)")
+                    }
+                }
+                Text((p.adjustments.developMethod ?? .natural).detail).font(.caption2).foregroundStyle(.secondary)
+                if p.result != nil {
+                    Text("堆栈后保留线性 Float32 主文件；预览是缩小的工作图，导出成片会从主文件重新计算。原始 NEF 不会被覆盖。")
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
                 Toggle("自动 STF 预览与成片", isOn: Binding(get: { p.adjustments.autoSTF ?? true }, set: { value in
                     store.update({ $0.adjustments.autoSTF = value }, render: true)
                 })).font(.caption.weight(.semibold)).tint(EditorStyle.accent)
@@ -582,11 +605,11 @@ struct ExportView: View {
                     Toggle("与屏幕预览一致（包含自动 STF）", isOn: $matchPreview)
                         .disabled(kind == .exr || store.project?.result == nil || store.project?.adjustments.autoSTF == false)
                         .accessibilityIdentifier("export-match-preview")
-                    Text(kind == .exr ? "OpenEXR 保存未调色的 Float32 线性堆栈，可在电脑上继续后期。" :
+                    Text(kind == .exr ? "OpenEXR 保存未调色的 Float32 线性堆栈，可在电脑上继续后期。原始 NEF 保存在工程中。" :
                          "默认沿用预览的拉伸、星云和调色效果。关闭上面的开关只会跳过 STF，其它调节仍会导出。")
                         .font(.caption).foregroundStyle(.secondary)
                     if store.project?.result == nil { Text("当前尚未堆栈，将导出第一张原片的编辑结果。").font(.caption).foregroundStyle(.orange) }
-                    Text("预览为 1600 像素代理，导出为全分辨率；局部星点会有轻微差别。合成边缘覆盖不足时保留透明，JPEG 边缘为黑色。")
+                    Text("预览是 1600 像素线性工作图，导出从 Float32 主文件重新计算。成片裁去约 1.5% 对齐边缘；原始线性 OpenEXR 保留全幅。")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Section("保存成片") {
