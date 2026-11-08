@@ -2,6 +2,9 @@ import SwiftUI
 import UIKit
 import CoreImage
 import PhotosUI
+import Photos
+
+enum ExportDestination: Equatable { case share, photos }
 
 struct StackNotice {
     let projectID: UUID
@@ -143,6 +146,16 @@ final class AppStore: ObservableObject {
             case 2: a.exposure = 1.0; a.shadows = 0.25; a.vibrance = 0.3; a.noise = 0.2
             default: break
             }; p.adjustments = a
+        }, render: true)
+    }
+    func enhanceNebula() {
+        checkpoint()
+        update({ p in
+            p.adjustments.arcsinh = 18
+            p.adjustments.maskedStretch = 0.55
+            p.adjustments.gradientRemoval = 0.4
+            p.adjustments.nebulaContrast = 0.55
+            p.adjustments.starProtection = 0.85
         }, render: true)
     }
     func flushSave() {
@@ -424,8 +437,12 @@ final class AppStore: ObservableObject {
         guard !busy, let repo = repository, let p = project else { return }
         do { try repo.clearCache(p); message = "解码缓存已清理。" } catch { message = error.localizedDescription }
     }
-    func export(_ kind: ExportKind) {
+    func export(_ kind: ExportKind, to destination: ExportDestination = .share) {
         guard !busy, let p = project, !p.frames.isEmpty, let repo = repository else { return }
+        if destination == .photos && kind == .tiff {
+            message = "保存到相册请选择 JPEG、HEIF 或 PNG；16 位 TIFF 请导出并分享到「文件」。"
+            return
+        }
         flushSave(); busy = true; status = "导出全分辨率 \(kind.rawValue)"; progress = 0
         Task {
             do {
@@ -438,7 +455,18 @@ final class AppStore: ObservableObject {
                     try pipeline.export(image: source, adjustments: p.adjustments, kind: kind, url: output)
                     return output
                 }.value
-                sharedURL = url
+                if destination == .photos {
+                    status = "正在保存到系统相册"
+                    let permission = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
+                    guard permission == .authorized || permission == .limited else {
+                        throw AstroError.message("没有保存到相册的权限，请在系统设置中允许 ASTRA 添加照片。")
+                    }
+                    try await PHPhotoLibrary.shared().performChanges {
+                        let request = PHAssetCreationRequest.forAsset()
+                        request.addResource(with: .photo, fileURL: url, options: nil)
+                    }
+                    message = "成片已保存到系统相册。"
+                } else { sharedURL = url }
             } catch { message = "导出失败：\(error.localizedDescription)" }
             busy = false
         }

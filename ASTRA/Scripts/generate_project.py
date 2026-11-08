@@ -8,11 +8,11 @@ def uid(name): return hashlib.sha1(name.encode()).hexdigest()[:24].upper()
 def quote(value): return json.dumps(value, ensure_ascii=False)
 objects = {}
 def add(name, value): objects[uid(name)] = value; return uid(name)
-files = sorted(list((ROOT / 'App').glob('*.swift')) + list((ROOT / 'Core').glob('*.cpp')) + list((ROOT / 'Core').glob('*.mm')))
+files = sorted(list((ROOT / 'App').glob('*.swift')) + list((ROOT / 'App').glob('*.metal')) + list((ROOT / 'Core').glob('*.cpp')) + list((ROOT / 'Core').glob('*.mm')))
 sources, children = [], []
 for file in files:
     rel = file.relative_to(ROOT).as_posix()
-    typ = 'sourcecode.swift' if file.suffix == '.swift' else ('sourcecode.cpp.objcpp' if file.suffix == '.mm' else 'sourcecode.cpp.cpp')
+    typ = 'sourcecode.swift' if file.suffix == '.swift' else ('sourcecode.metal' if file.suffix == '.metal' else ('sourcecode.cpp.objcpp' if file.suffix == '.mm' else 'sourcecode.cpp.cpp'))
     ref = add(rel, f'{{isa = PBXFileReference; lastKnownFileType = {typ}; path = {quote(rel)}; sourceTree = SOURCE_ROOT; }}')
     children.append(ref)
     sources.append(add('build:'+rel, f'{{isa = PBXBuildFile; fileRef = {ref}; }}'))
@@ -38,7 +38,7 @@ def conf(name, settings):
     body = ' '.join(f'{key} = {quote(value)};' for key,value in settings.items())
     return add(name, f'{{isa = XCBuildConfiguration; buildSettings = {{ {body} }}; name = {name.split(":")[-1]}; }}')
 base = {'SDKROOT':'iphoneos','IPHONEOS_DEPLOYMENT_TARGET':'26.0','CLANG_ENABLE_MODULES':'YES','CLANG_ENABLE_OBJC_ARC':'YES','CLANG_CXX_LANGUAGE_STANDARD':'c++17','CLANG_CXX_LIBRARY':'libc++','GCC_ENABLE_CPP_EXCEPTIONS':'YES','GCC_WARN_64_TO_32_BIT_CONVERSION':'YES','GCC_WARN_ABOUT_RETURN_TYPE':'YES_ERROR','SWIFT_VERSION':'5.0','SWIFT_STRICT_CONCURRENCY':'minimal','ENABLE_USER_SCRIPT_SANDBOXING':'YES'}
-target = {'PRODUCT_NAME':'ASTRA','PRODUCT_BUNDLE_IDENTIFIER':'com.astra.starrynight','INFOPLIST_FILE':'App/Info.plist','GENERATE_INFOPLIST_FILE':'NO','SWIFT_OBJC_BRIDGING_HEADER':'App/ASTRA-Bridging-Header.h','TARGETED_DEVICE_FAMILY':'1,2','CODE_SIGN_STYLE':'Automatic','ASSETCATALOG_COMPILER_APPICON_NAME':'AppIcon','MARKETING_VERSION':'0.7.1','CURRENT_PROJECT_VERSION':'10','SUPPORTS_MACCATALYST':'NO','LD_RUNPATH_SEARCH_PATHS':'$(inherited) @executable_path/Frameworks','SWIFT_EMIT_LOC_STRINGS':'YES'}
+target = {'PRODUCT_NAME':'ASTRA','PRODUCT_BUNDLE_IDENTIFIER':'com.astra.starrynight','INFOPLIST_FILE':'App/Info.plist','GENERATE_INFOPLIST_FILE':'NO','SWIFT_OBJC_BRIDGING_HEADER':'App/ASTRA-Bridging-Header.h','TARGETED_DEVICE_FAMILY':'1,2','CODE_SIGN_STYLE':'Automatic','ASSETCATALOG_COMPILER_APPICON_NAME':'AppIcon','MARKETING_VERSION':'0.7.2','CURRENT_PROJECT_VERSION':'11','SUPPORTS_MACCATALYST':'NO','LD_RUNPATH_SEARCH_PATHS':'$(inherited) @executable_path/Frameworks','SWIFT_EMIT_LOC_STRINGS':'YES'}
 ui_settings = {'PRODUCT_NAME':'ASTRAUITests','PRODUCT_BUNDLE_IDENTIFIER':'com.astra.starrynight.uitests','GENERATE_INFOPLIST_FILE':'YES','TEST_TARGET_NAME':'ASTRA','TARGETED_DEVICE_FAMILY':'1,2','CODE_SIGN_STYLE':'Automatic'}
 lists = {}
 for kind,baseSettings in [('project',base),('target',target),('uitest',ui_settings)]:

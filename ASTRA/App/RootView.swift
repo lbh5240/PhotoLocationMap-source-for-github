@@ -95,7 +95,7 @@ struct HelpView: View {
                 }
                 Section("三种模式") { Text("星空对齐：星点相似变换配准，适合跟踪拍摄和纯天空。\n星野：水平分界线上方对齐星空，下方固定地景平均；适合平坦地平线。\n星轨：固定机位最大值合成，不做星点对齐。") }
                 Section("NEF 与精度") { Text("使用系统 RAW 解码器，RAW 无法解码时直接报错，不使用内嵌 JPEG 替代。先去马赛克，再在线性扩展 sRGB 浮点空间堆栈。此版本不包含 CFA 暗场、平场或偏置场校准。支持范围取决于系统、机型与 RAW 压缩方式。") }
-                Section("画面与导出") { Text("合成结果默认开启自动 STF 屏幕预览，不改动 Float32 主文件，也不会写入导出。星云工具中的 Arcsinh、核心保护、梯度消除与星云对比会应用到导出。全尺寸导出支持 16 位 TIFF/PNG 与 8 位 JPEG/HEIF。") }
+                Section("画面与导出") { Text("合成结果默认开启自动 STF 屏幕预览，不改动 Float32 主文件，也不会写入导出。星云工具可一键增强，也可分别调整拉伸、亮核保护、梯度和星点。导出支持 JPEG、HEIF、PNG 保存到相册；16 位 TIFF 可通过分享保存到文件。") }
                 Section("处理任务") { Text("相册 NEF 导入会显示 iCloud 下载和逐张保存进度。导入时避免手动锁屏：系统可能暂停锁屏后的任务，后台时间也有限；已完成的照片会保存在工程里。导入只提取内嵌预览，全尺寸 RAW 在堆栈或导出时才解码。删除 App 会移除本地数据，请先通过文件 App 备份 ASTRA 文件夹。") }
                 Section("当前实现范围") { Text("背景消除使用低频网格估计；星点保护使用高频亮度掩膜，均可调强度。HDR 在星点对齐后以未饱和短曝光填补长曝光核心。没有画笔蒙版、完整 PixInsight 式迭代 Masked Stretch、镜头畸变配准、CFA 校准和 AI 模型降噪。") }
             }.navigationTitle("使用说明").toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }

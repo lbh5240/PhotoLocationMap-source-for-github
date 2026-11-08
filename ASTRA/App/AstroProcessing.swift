@@ -11,41 +11,18 @@ struct AstroProfile {
 enum AstroProcessing {
     // Work in extended linear RGB. These kernels alter a rendered view only;
     // the Float32 stack file is never rewritten by editing or STF.
-    private static let stretchKernel = CIColorKernel(source: """
-    kernel vec4 astroStretch(__sample source, __sample smooth, __sample background,
-                             float arc, float masked, float gradient, float nebula, float protect) {
-        vec3 rgb = max(source.rgb - gradient * (background.rgb - vec3(0.015)), vec3(0.0));
-        vec3 low = max(smooth.rgb - gradient * (background.rgb - vec3(0.015)), vec3(0.0));
-        float l = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
-        float lowL = dot(low, vec3(0.2126, 0.7152, 0.0722));
-        float star = smoothstep(0.015, 0.09, max(l - lowL, 0.0));
-        vec3 base = mix(rgb, low, star * protect);
-        float y = dot(base, vec3(0.2126, 0.7152, 0.0722));
-        float strength = max(arc, 0.001);
-        float stretch = log(strength * y + sqrt(1.0 + strength * strength * y * y)) /
-                        log(strength + sqrt(1.0 + strength * strength));
-        float core = masked * smoothstep(0.18, 0.75, y);
-        float target = mix(stretch, min(y, 1.0), core);
-        vec3 color = base * (target / max(y, 0.000001));
-        float gas = (1.0 - star * protect) * smoothstep(0.012, 0.16, lowL) *
-                    (1.0 - smoothstep(0.55, 0.9, lowL));
-        color = mix(color, max(color * 1.55 +
-                               (color - vec3(dot(color, vec3(0.2126, 0.7152, 0.0722)))) * 0.18,
-                               vec3(0.0)), gas * nebula);
-        color += max(rgb - low, vec3(0.0)) * star * protect;
-        return vec4(color, source.a);
+    private static let library: Result<Data, Error> = Result {
+        guard let url = Bundle.main.url(forResource: "default", withExtension: "metallib") else {
+            throw AstroError.message("星云处理资源缺失，请重新安装 ASTRA")
+        }
+        return try Data(contentsOf: url)
     }
-    """)
-
-    private static let stfKernel = CIColorKernel(source: """
-    kernel vec4 astroSTF(__sample source, float black, float white) {
-        vec3 rgb = max(source.rgb - vec3(black), vec3(0.0));
-        float l = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
-        float value = 8.0 * l / max(white - black, 0.00001);
-        float mapped = log(value + sqrt(1.0 + value * value)) / log(8.0 + sqrt(65.0));
-        return vec4(rgb * (mapped / max(l, 0.000001)), source.a);
+    private static let stretchKernel: Result<CIColorKernel, Error> = Result {
+        try CIColorKernel(functionName: "astroStretch", fromMetalLibraryData: library.get())
     }
-    """)
+    private static let stfKernel: Result<CIColorKernel, Error> = Result {
+        try CIColorKernel(functionName: "astroSTF", fromMetalLibraryData: library.get())
+    }
 
     static func process(_ image: CIImage, adjustments: Adjustments, profile: AstroProfile) throws -> CIImage {
         let arc = adjustments.arcsinh ?? 0
@@ -57,15 +34,15 @@ enum AstroProcessing {
         let blur = image.clampedToExtent().applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 7]).cropped(to: image.extent)
         let bg = profile.background.transformed(by: CGAffineTransform(scaleX: image.extent.width / profile.background.extent.width,
                                                                        y: image.extent.height / profile.background.extent.height))
-        guard let result = stretchKernel?.apply(extent: image.extent, arguments: [image, blur, bg, arc, masked, gradient, gas, protect]) else {
-            throw AstroError.message("星云处理内核不可用，请检查设备系统版本")
+        guard let result = try stretchKernel.get().apply(extent: image.extent, arguments: [image, blur, bg, arc, masked, gradient, gas, protect]) else {
+            throw AstroError.message("星云处理渲染失败，请重试")
         }
         return result
     }
 
     static func screenStretch(_ image: CIImage, profile: AstroProfile) throws -> CIImage {
-        guard let result = stfKernel?.apply(extent: image.extent, arguments: [image, profile.black, profile.white]) else {
-            throw AstroError.message("STF 预览内核不可用，请检查设备系统版本")
+        guard let result = try stfKernel.get().apply(extent: image.extent, arguments: [image, profile.black, profile.white]) else {
+            throw AstroError.message("STF 预览渲染失败，请重试")
         }
         return result
     }

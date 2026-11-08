@@ -9,10 +9,8 @@ private enum ToolPanel: String, CaseIterable {
 struct WorkspaceView: View {
     @EnvironmentObject private var store: AppStore
     @State private var panel = ToolPanel.stack
-    @State private var dockPage = 0
     @State private var comparing = false
     @State private var canvasOnly = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var importing = false
     @State private var pickingPhotos = false
     @State private var selectedPhotos: [PhotosPickerItem] = []
@@ -110,14 +108,31 @@ struct WorkspaceView: View {
         return f.camera.isEmpty ? resolution : "\(f.camera) · \(resolution)"
     }
     private var progressView: some View {
-        VStack(spacing: 8) {
-            HStack { Text(store.status).font(.caption); Spacer(); if store.canCancel { Button("取消", action: store.cancel).font(.caption) } }
-            if store.progress == 0 { ProgressView().frame(maxWidth: .infinity) } else { ProgressView(value: store.progress).tint(.mint) }
-            if store.status.contains("请保持屏幕解锁") {
-                Text("系统可能在锁屏后暂停相册读取；已完成的照片会逐张保存。")
-                    .font(.caption2).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(spacing: 9) {
+                Image(systemName: "sparkle.magnifyingglass").font(.system(size: 15, weight: .medium)).foregroundStyle(EditorStyle.accent)
+                Text(store.status).font(.caption.weight(.medium)).lineLimit(2)
+                Spacer(minLength: 4)
+                if store.progress > 0 { Text("\(Int(store.progress * 100))%")
+                        .font(.caption2.monospacedDigit().weight(.semibold)).foregroundStyle(EditorStyle.accent) }
+                if store.canCancel { Button("取消", action: store.cancel).font(.caption2.weight(.medium)) }
             }
-        }.padding(14).background(.white.opacity(0.05))
+            GeometryReader { geometry in
+                Capsule().fill(EditorStyle.line)
+                    .overlay(alignment: .leading) {
+                        Capsule().fill(EditorStyle.accent.gradient)
+                            .frame(width: max(3, geometry.size.width * min(1, max(0, store.progress))))
+                    }
+            }.frame(height: 4).accessibilityLabel("处理进度")
+                .accessibilityValue("\(Int(store.progress * 100))%")
+            if store.status.contains("请保持屏幕解锁") {
+                Text("保持屏幕解锁 · 完成一张即保存一张")
+                    .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+            }
+        }
+        .padding(.horizontal, 13).padding(.vertical, 10)
+        .background(EditorStyle.surface.opacity(0.7), in: RoundedRectangle(cornerRadius: 17))
+        .overlay(RoundedRectangle(cornerRadius: 17).strokeBorder(EditorStyle.line).allowsHitTesting(false))
     }
     private func canvasHeader(_ project: AstroProject) -> some View {
         HStack(spacing: 8) {
@@ -186,47 +201,28 @@ struct WorkspaceView: View {
     }
 
     private var toolBar: some View {
-        let items: [ToolPanel] = dockPage == 0 ? [.stack, .light, .color, .wheels] : [.curves, .hsl, .detail, .astro]
-        return VStack(spacing: 0) {
-            HStack(spacing: 4) {
-                ForEach(items, id: \.self) { item in
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 5) {
+                ForEach(ToolPanel.allCases, id: \.self) { item in
                     Button { panel = item; comparing = false } label: {
                         VStack(spacing: 4) {
                             Image(systemName: item.symbol).font(.system(size: 16, weight: .medium))
                             Text(item.rawValue).font(.caption2.weight(.medium)).lineLimit(1)
                         }
-                        .frame(maxWidth: .infinity, minHeight: 48)
+                        .frame(width: 76, height: 48)
                         .contentShape(Rectangle())
                         .foregroundStyle(panel == item ? EditorStyle.accent : Color.secondary)
                         .background(panel == item ? EditorStyle.accent.opacity(0.13) : .clear, in: RoundedRectangle(cornerRadius: 14))
                     }.buttonStyle(.plain).accessibilityAddTraits(panel == item ? .isSelected : [])
                         .accessibilityIdentifier("editor-tool-\(item)")
                 }
-                Button { changePage(1 - dockPage) } label: {
-                    VStack(spacing: 4) {
-                        Image(systemName: dockPage == 0 ? "chevron.right" : "chevron.left").font(.system(size: 12, weight: .semibold))
-                        Text("\(dockPage + 1)/2").font(.system(size: 9, weight: .medium, design: .monospaced))
-                    }.frame(width: 44, height: 48).contentShape(Rectangle()).foregroundStyle(.secondary)
-                }.buttonStyle(.plain).accessibilityLabel(dockPage == 0 ? "更多编辑工具" : "返回基础工具")
-                    .accessibilityIdentifier("editor-dock-page")
-            }
-            .padding(6)
+            }.padding(6)
         }
         .astroGlass()
-        .contentShape(RoundedRectangle(cornerRadius: 24))
-        .simultaneousGesture(DragGesture(minimumDistance: 24).onEnded { drag in
-            let dx = drag.translation.width, dy = drag.translation.height
-            guard abs(dx) > 35, abs(dx) > abs(dy) * 1.4 else { return }
-            changePage(dx < 0 ? 1 : 0)
-        })
+        .clipShape(RoundedRectangle(cornerRadius: 24))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("editor-dock")
         .disabled(store.busy)
-    }
-
-    private func changePage(_ page: Int) {
-        guard !store.busy, dockPage != page else { return }
-        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.16)) { dockPage = page }
     }
 
     @ViewBuilder private func controls(_ p: AstroProject) -> some View {
@@ -267,14 +263,20 @@ struct WorkspaceView: View {
             }
         case .astro:
             VStack(alignment: .leading, spacing: 8) {
+                Button { store.enhanceNebula() } label: {
+                    Label("一键增强星云 · 保留亮核", systemImage: "sparkles")
+                        .font(.caption.weight(.semibold)).foregroundStyle(EditorStyle.accent)
+                        .frame(maxWidth: .infinity, minHeight: 35)
+                        .background(EditorStyle.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 11))
+                }.buttonStyle(.plain).accessibilityIdentifier("astro-quick-enhance")
                 Toggle("自动 STF 屏幕预览", isOn: Binding(get: { p.adjustments.autoSTF ?? true }, set: { value in
                     store.update({ $0.adjustments.autoSTF = value }, render: true)
                 })).font(.caption.weight(.semibold)).tint(EditorStyle.accent)
                     .accessibilityIdentifier("auto-stf-toggle")
-                Text("STF 只改变屏幕显示，不写入线性合成文件，也不应用到导出。")
+                Text("STF 只改变屏幕显示。核心保护随拉伸生效；星点保护随星云对比生效。")
                     .font(.caption2).foregroundStyle(.secondary)
                 ParameterInspector(parameters: [
-                    astroParameter("Arcsinh 拉伸", "sparkles", \.arcsinh, 0...60),
+                    astroParameter("Arcsinh 拉伸", "sparkles", \.arcsinh, 0...60, step: 2, precision: 1),
                     astroParameter("Masked Stretch · 核心保护", "circle.dotted.circle", \.maskedStretch, 0...1),
                     astroParameter("背景梯度消除", "moon.stars", \.gradientRemoval, 0...1),
                     astroParameter("星云对比", "cloud", \.nebulaContrast, 0...1),
@@ -285,12 +287,13 @@ struct WorkspaceView: View {
     }
 
     private func astroParameter(_ title: String, _ symbol: String, _ key: WritableKeyPath<Adjustments, Double?>,
-                                _ range: ClosedRange<Double>, neutral: Double = 0) -> EditorParameter {
+                                _ range: ClosedRange<Double>, neutral: Double = 0,
+                                step: Double = 0.01, precision: Int = 2) -> EditorParameter {
         let binding = Binding(get: { store.project?.adjustments[keyPath: key] ?? neutral }, set: { value in
             store.update({ $0.adjustments[keyPath: key] = value }, render: true)
         })
         return EditorParameter(title: title, symbol: symbol, value: binding, range: range, neutral: neutral,
-                               step: 0.01, precision: 2, unit: "")
+                               step: step, precision: precision, unit: "")
     }
 
     private func parameter(_ title: String, _ symbol: String, _ key: WritableKeyPath<Adjustments, Double>,
@@ -555,7 +558,7 @@ struct FramesView: View {
 struct ExportView: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
-    @State private var kind = ExportKind.tiff
+    @State private var kind = ExportKind.jpeg
     var body: some View {
         NavigationStack {
             Form {
@@ -566,7 +569,17 @@ struct ExportView: View {
                     if store.project?.result == nil { Text("当前尚未堆栈，将导出第一张原片的编辑结果。").font(.caption).foregroundStyle(.orange) }
                     Text("合成边缘覆盖不足时保留透明；JPEG 边缘为黑色。建议导出后裁切。").font(.caption).foregroundStyle(.secondary)
                 }
-                Section { Button("导出并分享") { dismiss(); Task { try? await Task.sleep(for: .milliseconds(400)); store.export(kind) } }.frame(maxWidth: .infinity).disabled(store.busy) }
+                Section("保存成片") {
+                    Button("保存到手机相册", systemImage: "photo.badge.plus") {
+                        dismiss(); Task { try? await Task.sleep(for: .milliseconds(400)); store.export(kind, to: .photos) }
+                    }.disabled(store.busy || kind == .tiff)
+                        .accessibilityIdentifier("export-to-photos")
+                    Button("导出并分享", systemImage: "square.and.arrow.up") {
+                        dismiss(); Task { try? await Task.sleep(for: .milliseconds(400)); store.export(kind) }
+                    }.disabled(store.busy)
+                    if kind == .tiff { Text("16 位 TIFF 可分享到「文件」；保存到相册请选择 JPEG、HEIF 或 PNG。")
+                            .font(.caption).foregroundStyle(.secondary) }
+                }
             }.navigationTitle("导出成片").toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } } }
         }.presentationDetents([.large])
     }

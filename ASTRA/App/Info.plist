@@ -12,6 +12,7 @@
 <key>CFBundleVersion</key><string>$(CURRENT_PROJECT_VERSION)</string>
 <key>LSRequiresIPhoneOS</key><true/>
 <key>NSPhotoLibraryUsageDescription</key><string>读取您选择的照片原始 RAW/NEF 资源，用于堆栈和调色。</string>
+<key>NSPhotoLibraryAddUsageDescription</key><string>将您导出的星空成片保存到系统相册。</string>
 <key>UILaunchScreen</key><dict/>
 <key>UIFileSharingEnabled</key><true/>
 <key>LSSupportsOpeningDocumentsInPlace</key><true/>

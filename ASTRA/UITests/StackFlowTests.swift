@@ -44,24 +44,28 @@ final class StackFlowTests: XCTestCase {
         app.buttons["start-stack"].tap()
         let success = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "合成完成")).firstMatch
         XCTAssertTrue(success.waitForExistence(timeout: 35), app.debugDescription)
-        app.buttons["editor-dock-page"].tap()
+        app.descendants(matching: .any)["editor-dock"].firstMatch.swipeLeft()
         app.buttons["editor-tool-astro"].tap()
         XCTAssertTrue(app.switches["auto-stf-toggle"].exists)
+        XCTAssertTrue(app.buttons["astro-quick-enhance"].exists)
+        app.buttons["astro-quick-enhance"].tap()
         XCTAssertTrue(app.staticTexts["Arcsinh 拉伸"].exists)
         app.buttons["增大Arcsinh 拉伸"].tap()
         XCTAssertTrue(app.staticTexts["ruler-value"].exists)
         XCTAssertFalse(app.alerts["ASTRA"].exists, "星云处理内核必须实际运行")
         app.switches["auto-stf-toggle"].tap()
         XCTAssertTrue(app.buttons["导出照片"].isEnabled)
+        app.buttons["导出照片"].tap()
+        XCTAssertTrue(app.buttons["export-to-photos"].waitForExistence(timeout: 5))
     }
 
     @MainActor
     func testEditorDockAndPrecisionControls() {
         let app = launch(with: "good")
         let stack = app.buttons["editor-tool-stack"]
-        let pager = app.buttons["editor-dock-page"]
-        XCTAssertTrue(stack.exists && pager.exists)
-        let trailingEdge = pager.frame.maxX
+        let dock = app.descendants(matching: .any)["editor-dock"].firstMatch
+        XCTAssertTrue(stack.exists && dock.exists)
+        let trailingEdge = dock.frame.maxX
         app.buttons["editor-tool-light"].tap()
         let exposure = app.staticTexts["ruler-value"]
         XCTAssertTrue(exposure.waitForExistence(timeout: 5))
@@ -70,11 +74,11 @@ final class StackFlowTests: XCTestCase {
         XCTAssertEqual(exposure.label, "0.05 EV")
         capture("ASTRA-LIGHT", app: app)
 
-        pager.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-            .press(forDuration: 0.05, thenDragTo: stack.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)))
+        dock.coordinate(withNormalizedOffset: CGVector(dx: 0.88, dy: 0.5))
+            .press(forDuration: 0.05, thenDragTo: dock.coordinate(withNormalizedOffset: CGVector(dx: 0.12, dy: 0.5)))
         let curves = app.buttons["editor-tool-curves"]
         XCTAssertTrue(curves.waitForExistence(timeout: 5), app.debugDescription)
-        XCTAssertEqual(pager.frame.maxX, trailingEdge, accuracy: 1)
+        XCTAssertEqual(dock.frame.maxX, trailingEdge, accuracy: 1)
         curves.tap()
         let graph = app.descendants(matching: .any)["tone-curve-graph"].firstMatch
         XCTAssertTrue(graph.waitForExistence(timeout: 5))
@@ -83,9 +87,10 @@ final class StackFlowTests: XCTestCase {
         XCTAssertNotEqual(app.staticTexts["ruler-value"].label, "0.50")
         capture("ASTRA-CURVES", app: app)
 
-        pager.tap()
+        dock.coordinate(withNormalizedOffset: CGVector(dx: 0.12, dy: 0.5))
+            .press(forDuration: 0.05, thenDragTo: dock.coordinate(withNormalizedOffset: CGVector(dx: 0.88, dy: 0.5)))
         XCTAssertTrue(stack.waitForExistence(timeout: 5))
-        XCTAssertEqual(pager.frame.maxX, trailingEdge, accuracy: 1)
+        XCTAssertEqual(dock.frame.maxX, trailingEdge, accuracy: 1)
         app.buttons["editor-tool-wheels"].tap()
         XCTAssertTrue(app.buttons["中间调"].waitForExistence(timeout: 5))
         capture("ASTRA-WHEELS", app: app)
