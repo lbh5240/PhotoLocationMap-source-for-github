@@ -43,9 +43,11 @@ using namespace metal;
 [[stitchable]] float4 astroSTF(coreimage::sample_t source, float blackR, float blackG,
                               float blackB, float white, float method) {
     float3 black = float3(blackR, blackG, blackB);
-    float3 rgb = max(source.rgb - black, float3(0.0));
-    float l = dot(rgb, float3(0.2126, 0.7152, 0.0722));
     float sky = dot(black, float3(0.2126, 0.7152, 0.0722));
+    float toe = max((white - sky) * 0.02, 0.0005);
+    float3 delta = source.rgb - black;
+    float3 rgb = 0.5 * (delta + sqrt(delta * delta + float3(toe * toe)));
+    float l = dot(rgb, float3(0.2126, 0.7152, 0.0722));
     float x = l / max(white - sky, 0.00001);
     float mapped;
     if (method < 0.5) {

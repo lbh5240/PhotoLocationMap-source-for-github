@@ -758,7 +758,10 @@ private struct ReferenceRegionView: View {
                                 Button(option.rawValue) {
                                     aspect = option
                                     let current = store.project?.configuration.region ?? StackRegion(x: 0.2, y: 0.2, width: 0.6, height: 0.6)
-                                    store.update { $0.configuration.region = resized(current, width: CGFloat(current.width), size: bounds) }
+                                    store.update {
+                                        $0.configuration.regionAspect = option.rawValue
+                                        $0.configuration.region = resized(current, width: CGFloat(current.width), size: bounds)
+                                    }
                                 }
                                 .buttonStyle(.bordered)
                                 .tint(option == aspect ? EditorStyle.accent : .secondary)
@@ -788,7 +791,10 @@ private struct ReferenceRegionView: View {
             .background(EditorStyle.backdrop)
             .navigationTitle("选择主图与主体")
             .navigationBarTitleDisplayMode(.inline)
-            .onAppear { if let selected { load(selected) } }
+            .onAppear {
+                aspect = RegionAspect(rawValue: store.project?.configuration.regionAspect ?? "") ?? .free
+                if let selected { load(selected) }
+            }
         }
     }
 

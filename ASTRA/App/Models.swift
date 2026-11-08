@@ -17,6 +17,7 @@ struct StackRegion: Codable, Equatable, Sendable {
 struct StackConfiguration: Codable, Equatable, Sendable {
     var referenceFrameID: UUID?
     var region: StackRegion?
+    var regionAspect: String?
     var mode: StackMode = .sky
     var sigma: Double = 3
     var skyFraction: Double = 0.65
