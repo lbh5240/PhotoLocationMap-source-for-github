@@ -1,10 +1,8 @@
 #include <CoreImage/CoreImage.h>
 using namespace metal;
 
-extern "C" {
-namespace coreimage {
-
-float4 astroStretch(sample_t source, sample_t smooth, sample_t background,
+[[stitchable]] float4 astroStretch(coreimage::sample_t source, coreimage::sample_t smooth,
+                    coreimage::sample_t background,
                     float arc, float masked, float gradient, float nebula, float protect) {
     float3 rgb = max(source.rgb - gradient * (background.rgb - float3(0.015)), float3(0.0));
     float3 low = max(smooth.rgb - gradient * (background.rgb - float3(0.015)), float3(0.0));
@@ -27,12 +25,9 @@ float4 astroStretch(sample_t source, sample_t smooth, sample_t background,
     return float4(color, source.a);
 }
 
-float4 astroSTF(sample_t source, float black, float white) {
+[[stitchable]] float4 astroSTF(coreimage::sample_t source, float black, float white) {
     float3 rgb = max(source.rgb - float3(black), float3(0.0));
     float l = dot(rgb, float3(0.2126, 0.7152, 0.0722));
     float mapped = asinh(8.0 * l / max(white - black, 0.00001)) / asinh(8.0);
     return float4(rgb * (mapped / max(l, 0.000001)), source.a);
-}
-
-}
 }
