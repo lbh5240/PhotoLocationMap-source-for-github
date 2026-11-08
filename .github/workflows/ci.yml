@@ -51,3 +51,22 @@ jobs:
         with:
           name: ui-test-results
           path: TestResults
+
+  astra_ipa:
+    runs-on: xcode-27
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate ASTRA package
+        run: python3 Scripts/validate_package.py
+      - name: Build ASTRA device IPA
+        run: bash Scripts/build-unsigned.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ASTRA-0.7.1-ios
+          path: |
+            Build/ASTRA-unsigned.ipa
+            Build/ASTRA-unsigned.ipa.sha256
+            Build/core-tests.log
+            Build/device-build.log
