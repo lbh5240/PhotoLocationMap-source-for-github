@@ -53,7 +53,7 @@ enum AutoDevelop {
         // STF bounds are calibrated *after* background/color processing below.
         a.arcsinh = 0 // the adaptive STF performs the stretch once, avoiding doubled curves
         a.maskedStretch = 0
-        a.gradientRemoval = min(0.55, max(0.22, variation*1.2))
+        a.gradientRemoval = min(0.65, max(0.35, variation*2.7))
         a.backgroundNeutralization = min(0.7, max(0.2, abs(sky[0]-sky[2])/max(0.015,neutralSky)*0.6))
         a.greenSuppression = min(0.4, max(0,greenExcess-0.05)*0.55)
         a.nebulaContrast = min(0.5, max(0.22, 0.42 - 0.04*log10(max(1,p99/max(p50,0.002)))))
@@ -86,7 +86,7 @@ enum AutoDevelop {
         guard pixels.count >= 256 else { throw AstroError.message("有效背景区域不足，无法设定黑场") }
         pixels.sort { $0.0 < $1.0 }
         let n = pixels.count
-        let skyPixels = pixels[(n*40/100)..<(n*70/100)]
+        let skyPixels = pixels[(n*50/100)..<(n*80/100)]
         func median(_ channel: Int) -> Double {
             let values = skyPixels.map { v in
                 channel == 0 ? v.1 : (channel == 1 ? v.2 : v.3)
@@ -95,9 +95,9 @@ enum AutoDevelop {
         }
         // Work on the processed linear pixels: the old global 10th percentile
         // selected vignetted corners and made the whole cyan sky almost white.
-        let r = max(0, median(0)*0.985)
-        let g = max(0, median(1)*0.985)
-        let b = max(0, median(2)*0.985)
+        let r = max(0, median(0))
+        let g = max(0, median(1))
+        let b = max(0, median(2))
         a.autoBlackRed = r; a.autoBlackGreen = g; a.autoBlackBlue = b
         let sky = 0.2126*r+0.7152*g+0.0722*b
         a.autoBlack = sky
