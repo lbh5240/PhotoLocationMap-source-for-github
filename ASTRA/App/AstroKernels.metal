@@ -42,24 +42,32 @@ using namespace metal;
 }
 
 [[stitchable]] float4 astroSTF(coreimage::sample_t source, float blackR, float blackG,
-                              float blackB, float white, float method, float skyNoise, float midtone, float adaptive, float shadowKnee) {
+                              float blackB, float white, float method, float skyNoise, float midtone, float adaptive, float shadowKnee,
+                              float dehazeStrength, float colorRecovery) {
     float3 black = float3(blackR, blackG, blackB);
     float sky = dot(black, float3(0.2126, 0.7152, 0.0722));
     float toe = max((white - sky) * 0.02, 0.0005);
     float3 delta = source.rgb - black;
     float3 rgb = 0.5 * (delta + sqrt(delta * delta + float3(toe * toe)));
     float l = dot(rgb, float3(0.2126, 0.7152, 0.0722));
+    const float span = max(white - sky, 0.005);
+    const float signedSignal = dot(delta, float3(0.2126, 0.7152, 0.0722)) / span;
+    const float chroma = (max(delta.r, max(delta.g, delta.b)) - min(delta.r, min(delta.g, delta.b))) / span;
+    const float noiseFloor = max(0.008, 2.5 * skyNoise / span);
+    const float colorSignal = smoothstep(noiseFloor, noiseFloor + 0.13, chroma);
     float x = l / max(white - sky, 0.00001);
     if (adaptive > 0.5 && shadowKnee > 0.0) {
-        const float span = max(white - sky, 0.005);
         // Compute signed luminance before the per-channel colour floor.
         // Applying the floor first would turn zero-mean sky noise into glow.
-        const float signedSignal = dot(delta, float3(0.2126, 0.7152, 0.0722)) / span;
         const float rounding = min(0.002, 0.025 * shadowKnee);
         const float signal = 0.5 * (signedSignal +
             sqrt(signedSignal * signedSignal + rounding * rounding));
         // Smoothly restore unity gain before the brightest parts of the nebula.
-        x = signal * mix(0.02, 1.0, smoothstep(0.0, shadowKnee, signal));
+        const float extra = max(0.0, dehazeStrength - 1.0);
+        const float knee = shadowKnee + min(0.96 - shadowKnee, 0.48 * shadowKnee + 0.09) *
+                           extra * mix(1.0, 0.24, colorSignal);
+        const float corrected = signal * mix(0.02, 1.0, smoothstep(0.0, knee, signal));
+        x = mix(x, corrected, min(dehazeStrength, 1.0));
     } else if (adaptive > 0.5 && (method < 2.5 || method >= 3.5)) {
         // Limit the gain near the measured noise floor across all adaptive curves.
         const float knee = clamp(2.0 * skyNoise / max(white - sky, 0.005), 0.0, 0.20);
@@ -94,8 +102,29 @@ using namespace metal;
     // Chroma in the sky is dominated by read noise and colour differences in
     // the background model. Fade it in continuously as genuine signal rises.
     float chromaWeight = smoothstep(0.015, 0.24, x);
-    float3 balanced = mix(float3(l), rgb, chromaWeight);
+    // Recover measured colour from the input signal independently of the
+    // shadow curve. Guard the noise floor and taper near bright stellar cores.
+    const float recovery = colorRecovery * colorSignal * smoothstep(0.025, 0.16, signedSignal) *
+                           (1.0 - smoothstep(0.7, 1.25, signedSignal));
+    const float colorGain = chromaWeight + (1.10 - chromaWeight) * recovery;
+    float3 balanced = max(float3(l) + (rgb - float3(l)) * colorGain, float3(0.0));
     float3 output = balanced * (mapped / max(l, 0.000001));
     output /= max(1.0, max(output.r, max(output.g, output.b)));
     return float4(output, source.a);
+}
+
+
+[[stitchable]] float4 astroSpikeSeeds(coreimage::sample_t source, coreimage::sample_t broad) {
+    const float3 weights = float3(0.2126, 0.7152, 0.0722);
+    const float l = dot(source.rgb, weights);
+    const float local = dot(broad.rgb, weights);
+    const float bright = smoothstep(0.30, 0.72, l);
+    const float compact = smoothstep(0.30, 0.78, (l - local) / max(l, 0.00001));
+    return float4(clamp(source.rgb, 0.0, 1.0) * bright * compact, source.a);
+}
+
+[[stitchable]] float4 astroSpikeComposite(coreimage::sample_t source, coreimage::sample_t rays, float gain) {
+    const float3 light = 1.0 - exp(-max(rays.rgb, float3(0.0)) * gain);
+    const float3 rgb = source.rgb + (1.0 - clamp(source.rgb, 0.0, 1.0)) * light * source.a;
+    return float4(rgb, source.a);
 }

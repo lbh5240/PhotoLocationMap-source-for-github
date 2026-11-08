@@ -83,7 +83,6 @@ final class StackFlowTests: XCTestCase {
         let neutralImage = canvas.screenshot().image.pngData()
         app.descendants(matching: .any)["editor-dock"].firstMatch.swipeLeft()
         app.buttons["editor-tool-astro"].tap()
-        XCTAssertTrue(app.switches["auto-stf-toggle"].exists)
         XCTAssertTrue(app.buttons["auto-develop"].exists)
         app.buttons["auto-develop"].tap()
         var changed = false
@@ -92,8 +91,25 @@ final class StackFlowTests: XCTestCase {
             Thread.sleep(forTimeInterval: 0.25)
         }
         XCTAssertTrue(changed, "星云参数应改变真实预览像素")
+        let strength = app.sliders["dehaze-strength"]
+        XCTAssertTrue(strength.isEnabled)
+        let automatic = canvas.screenshot().image.pngData()
+        strength.adjust(toNormalizedSliderPosition: 0)
+        XCTAssertTrue(previewChanged(canvas, from: automatic), "去灰强度必须改变真实预览像素")
+        let noSpikes = canvas.screenshot().image.pngData()
+        let four = app.buttons["四芒"]
+        let inspector = app.scrollViews["editor-inspector"]
+        for _ in 0..<3 where !four.isHittable { inspector.swipeUp(velocity: .slow) }
+        four.tap()
+        XCTAssertTrue(previewChanged(canvas, from: noSpikes), "星芒必须改变真实预览像素")
+        app.buttons["关闭"].tap()
+        let removed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            canvas.screenshot().image.pngData() == noSpikes
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [removed], timeout: 8), .completed)
         let natural = canvas.screenshot().image.pngData()
-        XCTAssertTrue(app.buttons["develop-method-1"].exists)
+        for _ in 0..<4 where !app.buttons["develop-method-1"].isHittable { inspector.swipeUp(velocity: .slow) }
+        XCTAssertTrue(app.buttons["develop-method-1"].isHittable)
         app.buttons["develop-method-1"].tap()
         var coreChanged = false
         for _ in 0..<20 {
@@ -110,6 +126,8 @@ final class StackFlowTests: XCTestCase {
             Thread.sleep(forTimeInterval: 0.2)
         }
         XCTAssertTrue(gasChanged, "云气算法必须改变真实预览像素")
+        let arc = app.buttons["增大Arcsinh 拉伸"]
+        for _ in 0..<4 where !arc.isHittable { inspector.swipeUp(velocity: .slow) }
         XCTAssertTrue(app.staticTexts["Arcsinh 拉伸"].exists)
         app.buttons["增大Arcsinh 拉伸"].tap()
         XCTAssertTrue(app.staticTexts["ruler-value"].exists)
@@ -164,6 +182,15 @@ final class StackFlowTests: XCTestCase {
         app.buttons["editor-tool-wheels"].tap()
         XCTAssertTrue(app.buttons["中间调"].waitForExistence(timeout: 5))
         capture("ASTRA-WHEELS", app: app)
+    }
+
+    @MainActor
+    private func previewChanged(_ canvas: XCUIElement, from previous: Data?) -> Bool {
+        for _ in 0..<25 {
+            if canvas.screenshot().image.pngData() != previous { return true }
+            Thread.sleep(forTimeInterval: 0.2)
+        }
+        return false
     }
 
     @MainActor

@@ -65,6 +65,18 @@ enum DevelopMethod: Int, Codable, CaseIterable, Identifiable, Sendable {
         case .midtones: "联动亮度的中间调变换，适合中间调发灰、星云层次不明显的画面"
     } }
 }
+enum StarSpikeStyle: String, Codable, CaseIterable, Sendable {
+    case off, four, six
+
+    var title: String {
+        switch self {
+        case .off: "关闭"
+        case .four: "四芒"
+        case .six: "六芒"
+        }
+    }
+}
+
 struct Adjustments: Codable, Equatable, Sendable {
     var exposure: Double = 0
     var contrast: Double = 1
@@ -91,6 +103,10 @@ struct Adjustments: Codable, Equatable, Sendable {
     var adaptiveSky: Bool?
     var adaptiveSkyNoise: Double?
     var adaptiveShadowKnee: Double?
+    var dehazeStrength: Double?
+    var nebulaColorRecovery: Double?
+    var starSpikeStyle: StarSpikeStyle?
+    var starSpikeStrength: Double?
     var nebulaContrast: Double?
     var starProtection: Double?
     var backgroundNeutralization: Double?

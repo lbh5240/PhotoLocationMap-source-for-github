@@ -172,6 +172,10 @@ final class AppStore: ObservableObject {
             do {
                 var suggested = try await previewWorker.suggest(project: p, repository: repo)
                 suggested.developMethod = method ?? p.adjustments.developMethod ?? .natural
+                suggested.dehazeStrength = p.adjustments.dehazeStrength
+                suggested.nebulaColorRecovery = p.adjustments.nebulaColorRecovery ?? 0.45
+                suggested.starSpikeStyle = p.adjustments.starSpikeStyle
+                suggested.starSpikeStrength = p.adjustments.starSpikeStrength
                 guard selectedID == p.id else { busy = false; return }
                 busy = false; status = ""; progress = 1
                 checkpoint()

@@ -29,6 +29,43 @@ enum AstroProcessing {
         try CIColorKernel(functionName: "astroSTF", fromMetalLibraryData: library.get())
     }
 
+    private static let spikeSeeds: Result<CIColorKernel, Error> = Result {
+        try CIColorKernel(functionName: "astroSpikeSeeds", fromMetalLibraryData: library.get())
+    }
+    private static let spikeComposite: Result<CIColorKernel, Error> = Result {
+        try CIColorKernel(functionName: "astroSpikeComposite", fromMetalLibraryData: library.get())
+    }
+
+    static func addStarSpikes(_ image: CIImage, adjustments: Adjustments) throws -> CIImage {
+        let style = adjustments.starSpikeStyle ?? .off
+        let strength = min(1, max(0, adjustments.starSpikeStrength ?? 0.38))
+        guard style != .off, strength > 0 else { return image }
+        let extent = image.extent
+        let size = max(extent.width, extent.height)
+        let broad = image.clampedToExtent()
+            .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: max(1.1, size * 0.0025)])
+            .cropped(to: extent)
+        guard let seeds = try spikeSeeds.get().apply(extent: extent, arguments: [image, broad]) else {
+            throw AstroError.message("星芒亮星检测失败")
+        }
+        let angles: [Double] = style == .four ? [.pi / 4, 3 * .pi / 4] : [.pi / 6, .pi / 2, 5 * .pi / 6]
+        let radius = max(2, size * 0.013)
+        let rays = angles.map { angle -> CIImage in
+            let parameters: [String: Any] = [kCIInputRadiusKey: radius, kCIInputAngleKey: angle]
+            // Two directional averages give a tapered profile along each axis.
+            return seeds.applyingFilter("CIMotionBlur", parameters: parameters)
+                .applyingFilter("CIMotionBlur", parameters: parameters).cropped(to: extent)
+        }
+        let combined = rays.dropFirst().reduce(rays[0]) { sum, next in
+            next.applyingFilter("CIAdditionCompositing", parameters: [kCIInputBackgroundImageKey: sum])
+        }
+        let gain = Float(strength * 3 / sqrt(Double(angles.count)))
+        guard let result = try spikeComposite.get().apply(extent: extent, arguments: [image, combined, gain]) else {
+            throw AstroError.message("星芒合成失败")
+        }
+        return result
+    }
+
     static func process(_ image: CIImage, adjustments: Adjustments, profile: AstroProfile) throws -> CIImage {
         let arc = adjustments.arcsinh ?? 0
         let masked = adjustments.maskedStretch ?? 0
@@ -72,7 +109,9 @@ enum AstroProcessing {
                         Float(adjustments.developMethod?.rawValue ?? 0),
                         Float(adjustments.adaptiveSkyNoise ?? Double(profile.skyNoise)), profile.midtone,
                         adjustments.adaptiveSky == true ? Float(1) : Float(0),
-                        Float(adjustments.adaptiveShadowKnee ?? 0)]) else {
+                        Float(adjustments.adaptiveShadowKnee ?? 0),
+                        Float(min(2, max(0, adjustments.dehazeStrength ?? 1))),
+                        Float(min(1, max(0, adjustments.nebulaColorRecovery ?? 0)))]) else {
             throw AstroError.message("STF 预览渲染失败，请重试")
         }
         return result

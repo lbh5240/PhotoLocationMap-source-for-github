@@ -272,7 +272,8 @@ final class ImagePipeline {
     private func adjusted(image: CIImage, adjustments: Adjustments, profile: AstroProfile,
                           screenSTF: Bool) throws -> CIImage {
         let edited = try edit(image, adjustments, profile: profile)
-        return screenSTF ? try AstroProcessing.screenStretch(edited, profile: profile, adjustments: adjustments) : edited
+        let shown = screenSTF ? try AstroProcessing.screenStretch(edited, profile: profile, adjustments: adjustments) : edited
+        return try AstroProcessing.addStarSpikes(shown, adjustments: adjustments)
     }
     func export(image: CIImage, adjustments: Adjustments, kind: ExportKind, url: URL,
                 screenSTF: Bool = false) throws {

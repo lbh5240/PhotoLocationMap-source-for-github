@@ -200,7 +200,7 @@ struct WorkspaceView: View {
             }.padding(.horizontal, 3).frame(minHeight: 24)
             ScrollView {
                 controls(project).padding(.horizontal, 2).padding(.vertical, 1).disabled(store.busy)
-            }.id(panel)
+            }.id(panel).accessibilityIdentifier("editor-inspector")
             if panel == .stack { stackActions(project) }
         }
         .padding(10)
@@ -277,8 +277,14 @@ struct WorkspaceView: View {
                         .frame(maxWidth: .infinity, minHeight: 35)
                         .background(EditorStyle.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 11))
                 }.buttonStyle(.plain).accessibilityIdentifier("auto-develop")
-                Text("先校正天空梯度，再根据残余灰底和噪声自适应压低暗部。")
-                    .font(.caption2).foregroundStyle(.secondary)
+                astroSlider("去灰强度", key: \.dehazeStrength, range: 0...2, initial: 1, id: "dehaze-strength")
+                    .disabled(!p.usesScreenStretch || p.adjustments.adaptiveShadowKnee == nil)
+                if p.adjustments.adaptiveShadowKnee == nil {
+                    Text("先点智能显影分析灰底，再调去灰强度。").font(.caption2).foregroundStyle(.secondary)
+                }
+                astroSlider("云气色彩", key: \.nebulaColorRecovery, range: 0...1, initial: 0, id: "nebula-color-recovery")
+                    .disabled(!p.usesScreenStretch)
+                starSpikeControls(p)
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 3), spacing: 6) {
                     ForEach(DevelopMethod.allCases) { method in
                         Button(method.title) { store.chooseDevelopMethod(method) }
@@ -304,7 +310,7 @@ struct WorkspaceView: View {
                 ParameterInspector(parameters: [
                     astroParameter("Arcsinh 拉伸", "sparkles", \.arcsinh, 0...60, step: 2, precision: 1),
                     astroParameter("Masked Stretch · 核心保护", "circle.dotted.circle", \.maskedStretch, 0...1),
-                    astroParameter(p.adjustments.adaptiveSky == true ? "自适应去灰" : "背景梯度消除", "moon.stars", \.gradientRemoval, 0...1),
+                    astroParameter("背景梯度消除", "moon.stars", \.gradientRemoval, 0...1),
                     astroParameter("星云对比", "cloud", \.nebulaContrast, 0...1),
                     astroParameter("云气结构", "waveform.path", \.nebulaStructure, 0...1)
                 ], checkpoint: store.checkpoint).id("astro-nebula")
@@ -318,6 +324,48 @@ struct WorkspaceView: View {
                 ], checkpoint: store.checkpoint).id("astro-stars")
                 Text("背景中和与绿色抑制会改变真实色彩，请从低强度开始；星点缩小不做 AI 去星。")
                     .font(.caption2).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func astroSlider(_ title: String, key: WritableKeyPath<Adjustments, Double?>,
+                             range: ClosedRange<Double>, initial: Double, id: String) -> some View {
+        let current = store.project?.adjustments[keyPath: key] ?? initial
+        return VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Text(title)
+                Spacer()
+                Text("\(Int((current * 100).rounded()))%").monospacedDigit().foregroundStyle(.secondary)
+            }.font(.caption.weight(.medium))
+            Slider(value: Binding(get: { store.project?.adjustments[keyPath: key] ?? initial }, set: { value in
+                store.update({ $0.adjustments[keyPath: key] = value }, render: true)
+            }), in: range, step: 0.01, onEditingChanged: { editing in
+                if editing { store.checkpoint() }
+            })
+            .tint(EditorStyle.accent)
+            .accessibilityLabel(title)
+            .accessibilityIdentifier(id)
+        }
+    }
+
+    private func starSpikeControls(_ project: AstroProject) -> some View {
+        let style = project.adjustments.starSpikeStyle ?? .off
+        return VStack(alignment: .leading, spacing: 5) {
+            HStack {
+                Text("星芒").font(.caption.weight(.medium))
+                Picker("星芒", selection: Binding(get: { store.project?.adjustments.starSpikeStyle ?? .off }, set: { value in
+                    store.checkpoint()
+                    store.update({ $0.adjustments.starSpikeStyle = value }, render: true)
+                })) {
+                    ForEach(StarSpikeStyle.allCases, id: \.self) { option in
+                        Text(option.title).tag(option)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .accessibilityIdentifier("star-spike-style")
+            }
+            if style != .off {
+                astroSlider("星芒强度", key: \.starSpikeStrength, range: 0...1, initial: 0.38, id: "star-spike-strength")
             }
         }
     }
