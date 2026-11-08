@@ -122,9 +122,15 @@ final class StackFlowTests: XCTestCase {
         }
         XCTAssertTrue(spikesRemoved, "关闭星芒应恢复原先的预览像素")
         let natural = canvas.screenshot().image.pngData()
-        for _ in 0..<4 where !app.buttons["develop-method-1"].isHittable { inspector.swipeUp(velocity: .slow) }
-        XCTAssertTrue(app.buttons["develop-method-1"].isHittable)
-        app.buttons["develop-method-1"].tap()
+        app.buttons["editor-tool-detail"].tap()
+        app.buttons["editor-tool-astro"].tap()
+        let core = app.buttons["develop-method-1"]
+        for _ in 0..<5 where !core.isHittable {
+            inspector.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.76))
+                .press(forDuration: 0.05, thenDragTo: inspector.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.53)))
+        }
+        XCTAssertTrue(core.isHittable)
+        core.tap()
         var coreChanged = false
         for _ in 0..<20 {
             if canvas.screenshot().image.pngData() != natural { coreChanged = true; break }
