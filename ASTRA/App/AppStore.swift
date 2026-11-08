@@ -156,6 +156,10 @@ final class AppStore: ObservableObject {
             p.adjustments.gradientRemoval = 0.4
             p.adjustments.nebulaContrast = 0.55
             p.adjustments.starProtection = 0.85
+            p.adjustments.backgroundNeutralization = 0.25
+            p.adjustments.starReduction = 0.25
+            p.adjustments.nebulaStructure = 0.2
+            p.adjustments.starSaturation = 0.2
         }, render: true)
     }
     func flushSave() {
@@ -437,10 +441,15 @@ final class AppStore: ObservableObject {
         guard !busy, let repo = repository, let p = project else { return }
         do { try repo.clearCache(p); message = "解码缓存已清理。" } catch { message = error.localizedDescription }
     }
-    func export(_ kind: ExportKind, to destination: ExportDestination = .share) {
+    func export(_ kind: ExportKind, to destination: ExportDestination = .share,
+                matchPreview: Bool = true) {
         guard !busy, let p = project, !p.frames.isEmpty, let repo = repository else { return }
-        if destination == .photos && kind == .tiff {
-            message = "保存到相册请选择 JPEG、HEIF 或 PNG；16 位 TIFF 请导出并分享到「文件」。"
+        if kind == .exr && p.result == nil {
+            message = "请先堆栈，才能导出 Float32 线性 OpenEXR。"
+            return
+        }
+        if destination == .photos && (kind == .tiff || kind == .exr) {
+            message = "保存到相册请选择 JPEG、HEIF 或 PNG；TIFF 和 OpenEXR 请分享到「文件」。"
             return
         }
         flushSave(); busy = true; status = "导出全分辨率 \(kind.rawValue)"; progress = 0
@@ -452,7 +461,8 @@ final class AppStore: ObservableObject {
                     else { source = try pipeline.decode(repo.url(p, (p.frames.first(where: { $0.id == p.configuration.referenceFrameID }) ?? p.frames[0]).fileName)) }
                     let output = repo.url(p, "Exports/ASTRA-\(UUID().uuidString.prefix(8)).\(kind.ext)")
                     try FileManager.default.createDirectory(at: output.deletingLastPathComponent(), withIntermediateDirectories: true)
-                    try pipeline.export(image: source, adjustments: p.adjustments, kind: kind, url: output)
+                    try pipeline.export(image: source, adjustments: p.adjustments, kind: kind, url: output,
+                                        screenSTF: matchPreview && p.result != nil && (p.adjustments.autoSTF ?? true))
                     return output
                 }.value
                 if destination == .photos {

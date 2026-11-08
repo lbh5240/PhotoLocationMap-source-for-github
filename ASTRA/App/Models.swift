@@ -74,6 +74,11 @@ struct Adjustments: Codable, Equatable, Sendable {
     var gradientRemoval: Double?
     var nebulaContrast: Double?
     var starProtection: Double?
+    var backgroundNeutralization: Double?
+    var greenSuppression: Double?
+    var starReduction: Double?
+    var nebulaStructure: Double?
+    var starSaturation: Double?
     static let neutral = Adjustments()
 }
 struct FrameRecord: Identifiable, Codable, Sendable {
@@ -120,7 +125,7 @@ enum AstroError: LocalizedError {
     var errorDescription: String? { if case let .message(s) = self { return s }; return nil }
 }
 enum ExportKind: String, CaseIterable, Identifiable, Sendable {
-    case tiff = "TIFF 16 位", jpeg = "JPEG", png = "PNG 16 位", heif = "HEIF"
+    case tiff = "TIFF 16 位", jpeg = "JPEG", png = "PNG 16 位", heif = "HEIF", exr = "OpenEXR 32 位线性"
     var id: String { rawValue }
-    var ext: String { switch self { case .tiff: "tiff"; case .jpeg: "jpg"; case .png: "png"; case .heif: "heic" } }
+    var ext: String { switch self { case .tiff: "tiff"; case .jpeg: "jpg"; case .png: "png"; case .heif: "heic"; case .exr: "exr" } }
 }

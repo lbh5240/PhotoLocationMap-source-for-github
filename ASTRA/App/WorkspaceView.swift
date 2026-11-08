@@ -269,19 +269,30 @@ struct WorkspaceView: View {
                         .frame(maxWidth: .infinity, minHeight: 35)
                         .background(EditorStyle.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 11))
                 }.buttonStyle(.plain).accessibilityIdentifier("astro-quick-enhance")
-                Toggle("自动 STF 屏幕预览", isOn: Binding(get: { p.adjustments.autoSTF ?? true }, set: { value in
+                Toggle("自动 STF 预览与成片", isOn: Binding(get: { p.adjustments.autoSTF ?? true }, set: { value in
                     store.update({ $0.adjustments.autoSTF = value }, render: true)
                 })).font(.caption.weight(.semibold)).tint(EditorStyle.accent)
                     .accessibilityIdentifier("auto-stf-toggle")
-                Text("STF 只改变屏幕显示。核心保护随拉伸生效；星点保护随星云对比生效。")
+                Text("STF 默认也用于所见即所得导出；原始线性数据可另存 OpenEXR。")
                     .font(.caption2).foregroundStyle(.secondary)
+                Text("云气与背景").font(.caption2.weight(.semibold)).foregroundStyle(EditorStyle.accent)
                 ParameterInspector(parameters: [
                     astroParameter("Arcsinh 拉伸", "sparkles", \.arcsinh, 0...60, step: 2, precision: 1),
                     astroParameter("Masked Stretch · 核心保护", "circle.dotted.circle", \.maskedStretch, 0...1),
                     astroParameter("背景梯度消除", "moon.stars", \.gradientRemoval, 0...1),
                     astroParameter("星云对比", "cloud", \.nebulaContrast, 0...1),
-                    astroParameter("星点保护", "sparkle", \.starProtection, 0...1, neutral: 1)
-                ], checkpoint: store.checkpoint).id(ToolPanel.astro)
+                    astroParameter("云气结构", "waveform.path", \.nebulaStructure, 0...1)
+                ], checkpoint: store.checkpoint).id("astro-nebula")
+                Text("天空色彩与星点").font(.caption2.weight(.semibold)).foregroundStyle(EditorStyle.accent)
+                ParameterInspector(parameters: [
+                    astroParameter("背景中和", "circle.lefthalf.filled", \.backgroundNeutralization, 0...1),
+                    astroParameter("绿色偏色抑制", "leaf", \.greenSuppression, 0...1),
+                    astroParameter("星点保护", "sparkle", \.starProtection, 0...1, neutral: 1),
+                    astroParameter("星点缩小", "sparkle.magnifyingglass", \.starReduction, 0...1),
+                    astroParameter("星点色彩", "circle.hexagongrid", \.starSaturation, 0...1)
+                ], checkpoint: store.checkpoint).id("astro-stars")
+                Text("背景中和与绿色抑制会改变真实色彩，请从低强度开始；星点缩小不做 AI 去星。")
+                    .font(.caption2).foregroundStyle(.secondary)
             }
         }
     }
@@ -559,25 +570,32 @@ struct ExportView: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.dismiss) private var dismiss
     @State private var kind = ExportKind.jpeg
+    @State private var matchPreview = true
     var body: some View {
         NavigationStack {
             Form {
                 Section("格式") { Picker("文件格式", selection: $kind) { ForEach(ExportKind.allCases) { Text($0.rawValue).tag($0) } }.pickerStyle(.inline) }
-                Section("全分辨率 · sRGB") {
+                Section(kind == .exr ? "Float32 线性" : "全分辨率 · sRGB") {
                     if let p = store.project { Text(p.result.map { "\($0.width) × \($0.height)" } ?? p.frames.first.map { "\($0.width) × \($0.height)" } ?? "") }
-                    Text("导出会读取完整尺寸数据并应用星云工具和其它调整。自动 STF 仅用于屏幕预览；要导出明亮的星云，请调节 Arcsinh 拉伸。16 位 TIFF 适合继续后期。").font(.caption).foregroundStyle(.secondary)
+                    Toggle("与屏幕预览一致（包含自动 STF）", isOn: $matchPreview)
+                        .disabled(kind == .exr || store.project?.result == nil || store.project?.adjustments.autoSTF == false)
+                        .accessibilityIdentifier("export-match-preview")
+                    Text(kind == .exr ? "OpenEXR 保存未调色的 Float32 线性堆栈，可在电脑上继续后期。" :
+                         "默认沿用预览的拉伸、星云和调色效果。关闭上面的开关只会跳过 STF，其它调节仍会导出。")
+                        .font(.caption).foregroundStyle(.secondary)
                     if store.project?.result == nil { Text("当前尚未堆栈，将导出第一张原片的编辑结果。").font(.caption).foregroundStyle(.orange) }
-                    Text("合成边缘覆盖不足时保留透明；JPEG 边缘为黑色。建议导出后裁切。").font(.caption).foregroundStyle(.secondary)
+                    Text("预览为 1600 像素代理，导出为全分辨率；局部星点会有轻微差别。合成边缘覆盖不足时保留透明，JPEG 边缘为黑色。")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
                 Section("保存成片") {
                     Button("保存到手机相册", systemImage: "photo.badge.plus") {
-                        dismiss(); Task { try? await Task.sleep(for: .milliseconds(400)); store.export(kind, to: .photos) }
-                    }.disabled(store.busy || kind == .tiff)
+                        dismiss(); Task { try? await Task.sleep(for: .milliseconds(400)); store.export(kind, to: .photos, matchPreview: matchPreview) }
+                    }.disabled(store.busy || kind == .tiff || kind == .exr)
                         .accessibilityIdentifier("export-to-photos")
                     Button("导出并分享", systemImage: "square.and.arrow.up") {
-                        dismiss(); Task { try? await Task.sleep(for: .milliseconds(400)); store.export(kind) }
-                    }.disabled(store.busy)
-                    if kind == .tiff { Text("16 位 TIFF 可分享到「文件」；保存到相册请选择 JPEG、HEIF 或 PNG。")
+                        dismiss(); Task { try? await Task.sleep(for: .milliseconds(400)); store.export(kind, matchPreview: matchPreview) }
+                    }.disabled(store.busy || (kind == .exr && store.project?.result == nil))
+                    if kind == .tiff || kind == .exr { Text("TIFF 和 OpenEXR 可分享到「文件」；保存到相册请选择 JPEG、HEIF 或 PNG。")
                             .font(.caption).foregroundStyle(.secondary) }
                 }
             }.navigationTitle("导出成片").toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } } }

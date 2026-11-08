@@ -75,6 +75,7 @@ struct PhotoCanvas: View {
             .onLongPressGesture(minimumDuration: 0.25, pressing: { comparing = $0 }, perform: {})
             .onTapGesture(count: 2) { withAnimation(.snappy) { zoom = zoom > 1 ? 1 : 3; offset = .zero } }
             .accessibilityLabel("照片预览。双指缩放，长按比较调整前后。预览最长边 1600 像素。")
+            .accessibilityIdentifier("photo-canvas")
         }
     }
     private func fit(_ size: CGSize, into box: CGSize) -> CGSize { let s = min(box.width/size.width, box.height/size.height); return CGSize(width: size.width*s, height: size.height*s) }

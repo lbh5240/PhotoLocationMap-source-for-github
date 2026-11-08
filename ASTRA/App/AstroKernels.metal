@@ -3,13 +3,19 @@ using namespace metal;
 
 [[stitchable]] float4 astroStretch(coreimage::sample_t source, coreimage::sample_t smooth,
                     coreimage::sample_t background,
-                    float arc, float masked, float gradient, float nebula, float protect) {
-    float3 rgb = max(source.rgb - gradient * (background.rgb - float3(0.015)), float3(0.0));
-    float3 low = max(smooth.rgb - gradient * (background.rgb - float3(0.015)), float3(0.0));
+                    float arc, float masked, float gradient, float nebula, float protect,
+                    float neutral, float green, float reduceStars, float structure, float starColor) {
+    float3 sky = background.rgb;
+    float skyL = dot(sky, float3(0.2126, 0.7152, 0.0722));
+    float3 cast = neutral * (sky - float3(skyL));
+    float3 rgb = max(source.rgb - gradient * (sky - float3(0.015)) - cast, float3(0.0));
+    float3 low = max(smooth.rgb - gradient * (sky - float3(0.015)) - cast, float3(0.0));
+    rgb.g -= green * max(0.0, rgb.g - (rgb.r + rgb.b) * 0.5);
+    low.g -= green * max(0.0, low.g - (low.r + low.b) * 0.5);
     float l = dot(rgb, float3(0.2126, 0.7152, 0.0722));
     float lowL = dot(low, float3(0.2126, 0.7152, 0.0722));
     float star = smoothstep(0.015, 0.09, max(l - lowL, 0.0));
-    float3 base = mix(rgb, low, star * protect);
+    float3 base = mix(rgb, low, star * min(1.0, protect + reduceStars * (1.0 - protect)));
     float y = dot(base, float3(0.2126, 0.7152, 0.0722));
     float strength = max(arc, 0.001);
     float stretched = arc > 0.0 ? asinh(strength * y) / asinh(strength) : y;
@@ -21,7 +27,11 @@ using namespace metal;
     color = mix(color, max(color * 1.55 +
                            (color - float3(dot(color, float3(0.2126, 0.7152, 0.0722)))) * 0.18,
                            float3(0.0)), gas * nebula);
-    color += max(rgb - low, float3(0.0)) * star * protect;
+    float3 starSignal = max(rgb - low, float3(0.0)) * star * protect * (1.0 - reduceStars);
+    float starL = dot(starSignal, float3(0.2126, 0.7152, 0.0722));
+    color += max(float3(starL) + (starSignal - float3(starL)) * (1.0 + starColor), float3(0.0));
+    float cloud = (1.0 - star) * smoothstep(0.006, 0.09, lowL);
+    color = max(color + (low - sky) * structure * cloud, float3(0.0));
     return float4(color, source.a);
 }
 

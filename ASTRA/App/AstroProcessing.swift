@@ -30,11 +30,21 @@ enum AstroProcessing {
         let gradient = adjustments.gradientRemoval ?? 0
         let gas = adjustments.nebulaContrast ?? 0
         let protect = adjustments.starProtection ?? 1
-        guard arc > 0 || gradient > 0 || gas > 0 else { return image }
-        let blur = image.clampedToExtent().applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 7]).cropped(to: image.extent)
+        let neutral = adjustments.backgroundNeutralization ?? 0
+        let green = adjustments.greenSuppression ?? 0
+        let reduceStars = adjustments.starReduction ?? 0
+        let structure = adjustments.nebulaStructure ?? 0
+        let starColor = adjustments.starSaturation ?? 0
+        guard arc > 0 || gradient > 0 || gas > 0 || neutral > 0 || green > 0 ||
+              reduceStars > 0 || structure > 0 || starColor > 0 else { return image }
+        // Match the same angular blur in the 1600 px proxy and full-resolution export.
+        let radius = max(1, max(image.extent.width, image.extent.height) / 1600 * 7)
+        let blur = image.clampedToExtent().applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: radius]).cropped(to: image.extent)
         let bg = profile.background.transformed(by: CGAffineTransform(scaleX: image.extent.width / profile.background.extent.width,
                                                                        y: image.extent.height / profile.background.extent.height))
-        guard let result = try stretchKernel.get().apply(extent: image.extent, arguments: [image, blur, bg, arc, masked, gradient, gas, protect]) else {
+        guard let result = try stretchKernel.get().apply(extent: image.extent,
+            arguments: [image, blur, bg, arc, masked, gradient, gas, protect,
+                        neutral, green, reduceStars, structure, starColor]) else {
             throw AstroError.message("星云处理渲染失败，请重试")
         }
         return result

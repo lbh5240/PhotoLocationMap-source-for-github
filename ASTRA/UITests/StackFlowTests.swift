@@ -44,19 +44,31 @@ final class StackFlowTests: XCTestCase {
         app.buttons["start-stack"].tap()
         let success = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "合成完成")).firstMatch
         XCTAssertTrue(success.waitForExistence(timeout: 35), app.debugDescription)
+        XCTAssertTrue(app.buttons["导出照片"].waitForExistence(timeout: 5))
+        let canvas = app.descendants(matching: .any)["photo-canvas"].firstMatch
+        XCTAssertTrue(canvas.waitForExistence(timeout: 5))
+        let neutralImage = canvas.screenshot().image.pngData()
         app.descendants(matching: .any)["editor-dock"].firstMatch.swipeLeft()
         app.buttons["editor-tool-astro"].tap()
         XCTAssertTrue(app.switches["auto-stf-toggle"].exists)
         XCTAssertTrue(app.buttons["astro-quick-enhance"].exists)
         app.buttons["astro-quick-enhance"].tap()
+        var changed = false
+        for _ in 0..<12 {
+            if canvas.screenshot().image.pngData() != neutralImage { changed = true; break }
+            Thread.sleep(forTimeInterval: 0.25)
+        }
+        XCTAssertTrue(changed, "星云参数应改变真实预览像素")
         XCTAssertTrue(app.staticTexts["Arcsinh 拉伸"].exists)
         app.buttons["增大Arcsinh 拉伸"].tap()
         XCTAssertTrue(app.staticTexts["ruler-value"].exists)
         XCTAssertFalse(app.alerts["ASTRA"].exists, "星云处理内核必须实际运行")
-        app.switches["auto-stf-toggle"].tap()
         XCTAssertTrue(app.buttons["导出照片"].isEnabled)
         app.buttons["导出照片"].tap()
         XCTAssertTrue(app.buttons["export-to-photos"].waitForExistence(timeout: 5))
+        let match = app.switches["export-match-preview"]
+        XCTAssertTrue(match.exists)
+        XCTAssertEqual(match.value as? String, "1", "成片默认应与预览一致")
     }
 
     @MainActor
