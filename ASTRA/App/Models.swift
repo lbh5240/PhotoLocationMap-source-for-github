@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(CoreGraphics)
+import CoreGraphics
+#endif
 
 enum StackMode: Int, Codable, CaseIterable, Identifiable, Sendable {
     case sky, landscape, trails
@@ -124,10 +127,11 @@ struct StackCrop: Codable, Sendable {
     let height: Int
 
     init?(region: StackRegion, reference: CGRect, aspect: String?) {
-        let selected = CGRect(x: reference.minX + CGFloat(region.x) * reference.width,
-                              y: reference.minY + CGFloat(region.y) * reference.height,
-                              width: CGFloat(region.width) * reference.width,
-                              height: CGFloat(region.height) * reference.height).intersection(reference)
+        let origin = CGPoint(x: reference.minX + CGFloat(region.x) * reference.width,
+                             y: reference.minY + CGFloat(region.y) * reference.height)
+        let size = CGSize(width: CGFloat(region.width) * reference.width,
+                          height: CGFloat(region.height) * reference.height)
+        let selected = CGRect(origin: origin, size: size).intersection(reference)
         guard !selected.isNull else { return nil }
         let left = Int(ceil(selected.minX)), bottom = Int(ceil(selected.minY))
         let availableWidth = Int(floor(selected.maxX)) - left
