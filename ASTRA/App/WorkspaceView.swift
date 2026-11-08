@@ -287,15 +287,9 @@ struct WorkspaceView: View {
                     Text("先点智能显影分析灰底，再调去灰强度。").font(.caption2).foregroundStyle(.secondary)
                 }
                 starSpikeControls(p)
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 3), spacing: 6) {
-                    ForEach(DevelopMethod.allCases) { method in
-                        Button(method.title) { store.chooseDevelopMethod(method) }
-                            .font(.caption.weight(.medium))
-                            .frame(maxWidth: .infinity, minHeight: 32)
-                            .background((p.adjustments.developMethod ?? .natural) == method ? EditorStyle.accent.opacity(0.22) : EditorStyle.surface,
-                                        in: RoundedRectangle(cornerRadius: 9))
-                            .accessibilityIdentifier("develop-method-\(method.rawValue)")
-                    }
+                VStack(spacing: 6) {
+                    developMethodRow([.natural, .core, .nebula], selected: p.adjustments.developMethod ?? .natural)
+                    developMethodRow([.quietSky, .midtones], selected: p.adjustments.developMethod ?? .natural)
                 }
                 Text((p.adjustments.developMethod ?? .natural).detail).font(.caption2).foregroundStyle(.secondary)
                 if p.result != nil {
@@ -327,6 +321,22 @@ struct WorkspaceView: View {
                 Text("背景中和与绿色抑制会改变真实色彩，请从低强度开始；星点缩小不做 AI 去星。")
                     .font(.caption2).foregroundStyle(.secondary)
             }
+        }
+    }
+
+    private func developMethodRow(_ methods: [DevelopMethod], selected: DevelopMethod) -> some View {
+        HStack(spacing: 6) {
+            ForEach(methods) { method in
+                Button { store.chooseDevelopMethod(method) } label: {
+                    Text(method.title).font(.caption.weight(.medium))
+                        .frame(maxWidth: .infinity, minHeight: 32)
+                        .editorCard(selected: method == selected)
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(method == selected ? .isSelected : [])
+                .accessibilityIdentifier("develop-method-\(method.rawValue)")
+            }
+            if methods.count == 2 { Color.clear.frame(maxWidth: .infinity).accessibilityHidden(true) }
         }
     }
 

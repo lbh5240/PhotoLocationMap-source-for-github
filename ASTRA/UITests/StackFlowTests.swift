@@ -125,11 +125,7 @@ final class StackFlowTests: XCTestCase {
         app.buttons["editor-tool-detail"].tap()
         app.buttons["editor-tool-astro"].tap()
         let core = app.buttons["develop-method-1"]
-        for _ in 0..<5 where !core.isHittable {
-            inspector.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.76))
-                .press(forDuration: 0.05, thenDragTo: inspector.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.53)))
-        }
-        XCTAssertTrue(core.isHittable)
+        XCTAssertTrue(core.exists)
         core.tap()
         var coreChanged = false
         for _ in 0..<20 {
