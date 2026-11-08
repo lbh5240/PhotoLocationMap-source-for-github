@@ -636,6 +636,7 @@ private struct ReferenceRegionView: View {
     @State private var aspect: RegionAspect = .free
     @State private var draft: StackRegion?
     @State private var gestureBase: StackRegion?
+    @State private var gestureStarted = false
     @State private var moving = false
     @State private var pinchBase: StackRegion?
 
@@ -715,8 +716,9 @@ private struct ReferenceRegionView: View {
                                 .position(x: geometry.size.width / 2, y: geometry.size.height / 2)
                                 .gesture(DragGesture(minimumDistance: 4)
                                     .onChanged { value in
-                                        if gestureBase == nil {
-                                            gestureBase = draft ?? store.project?.configuration.region
+                                        if !gestureStarted {
+                                            gestureStarted = true
+                                            gestureBase = store.project?.configuration.region
                                             let point = value.startLocation
                                             moving = displayedRegion(origin: .zero, size: size, region: gestureBase)?.insetBy(dx: -8, dy: -8).contains(point) == true
                                         }
@@ -728,7 +730,7 @@ private struct ReferenceRegionView: View {
                                         }
                                     }
                                     .onEnded { value in
-                                        defer { gestureBase = nil; moving = false; draft = nil }
+                                        defer { gestureBase = nil; gestureStarted = false; moving = false; draft = nil }
                                         if let result = draft, result.width >= 0.08, result.height >= 0.08 {
                                             store.update { $0.configuration.region = result }
                                         }

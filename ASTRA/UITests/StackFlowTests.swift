@@ -19,7 +19,9 @@ final class StackFlowTests: XCTestCase {
         XCTAssertTrue(canvas.waitForExistence(timeout: 10), app.debugDescription)
         canvas.coordinate(withNormalizedOffset: CGVector(dx: 0.08, dy: 0.08))
             .press(forDuration: 0.08, thenDragTo: canvas.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.93)))
-        XCTAssertTrue(app.descendants(matching: .any)["reference-region"].firstMatch.waitForExistence(timeout: 4))
+        let region = app.descendants(matching: .any)["reference-region"].firstMatch
+        XCTAssertTrue(region.waitForExistence(timeout: 4))
+        XCTAssertGreaterThan(region.frame.width, canvas.frame.width * 0.5, "从空白处拖动应按整个手势框选")
         app.buttons["完成"].tap()
         app.buttons["start-stack"].tap()
         let success = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "合成完成")).firstMatch
