@@ -78,7 +78,7 @@ private actor PreviewWorker {
         }
     }
 
-    func suggest(project: AstroProject, repository: ProjectRepository) throws -> Adjustments {
+    func suggest(project: AstroProject, repository: ProjectRepository, method: DehazeMethod? = nil) throws -> Adjustments {
         let url = repository.url(project, project.result?.fileName ?? project.frames.first(where: { $0.id == project.configuration.referenceFrameID })?.fileName ?? project.frames[0].fileName)
         if proxy == nil || key != url { _ = try render(project: project, repository: repository) }
         guard let proxy else { throw AstroError.message("无法分析预览图") }
@@ -86,12 +86,26 @@ private actor PreviewWorker {
         var adjustments = try AutoDevelop.suggest(pipeline.proxy(proxy, maxSide: 256))
         let profile = astroProfile ?? pipeline.astroProfile(proxy)
         adjustments.adaptiveSky = true
+        adjustments.dehazeMethod = method ?? project.adjustments.dehazeMethod
         let span = Double(profile.white - profile.black)
         let signal = span * min(0.45, max(0.08, Double(profile.midtone)))
         adjustments.gradientRemoval = AutoDevelop.skyCorrection(spread: profile.skySpread,
                                                                 noise: Double(profile.skyNoise), signal: signal)
         // The STF handles noise-floor gain. Avoid adding a fixed blur to clean data.
         adjustments.noise = 0
+        let corrected = try pipeline.edit(proxy, adjustments, profile: profile)
+        try AutoDevelop.calibrateSTF(&adjustments, sample: pipeline.proxy(corrected, maxSide: 256))
+        return adjustments
+    }
+
+    func recalibrate(project: AstroProject, repository: ProjectRepository, method: DehazeMethod) throws -> Adjustments {
+        let url = repository.url(project, project.result?.fileName ?? project.frames.first(where: { $0.id == project.configuration.referenceFrameID })?.fileName ?? project.frames[0].fileName)
+        if proxy == nil || key != url { _ = try render(project: project, repository: repository) }
+        guard let proxy else { throw AstroError.message("无法分析预览图") }
+        let pipeline = self.pipeline ?? ImagePipeline()
+        var adjustments = project.adjustments
+        adjustments.dehazeMethod = method
+        let profile = astroProfile ?? pipeline.astroProfile(proxy)
         let corrected = try pipeline.edit(proxy, adjustments, profile: profile)
         try AutoDevelop.calibrateSTF(&adjustments, sample: pipeline.proxy(corrected, maxSide: 256))
         return adjustments
@@ -165,12 +179,32 @@ final class AppStore: ObservableObject {
             $0.adjustments.autoSTF = true
         }, render: true)
     }
-    func autoDevelop(method: DevelopMethod? = nil) {
+    func chooseDehazeMethod(_ method: DehazeMethod) {
+        guard !busy, let project, let repo = repository else { return }
+        if project.adjustments.adaptiveSky != true {
+            autoDevelop(dehazeMethod: method)
+            return
+        }
+        busy = true; status = "重新分析背景"; progress = 0
+        Task {
+            do {
+                let adjusted = try await previewWorker.recalibrate(project: project, repository: repo, method: method)
+                guard selectedID == project.id else { busy = false; status = ""; return }
+                busy = false; status = ""; progress = 1
+                checkpoint()
+                update({ $0.adjustments = adjusted }, render: true)
+            } catch {
+                busy = false; status = ""; message = error.localizedDescription
+            }
+        }
+    }
+
+    func autoDevelop(method: DevelopMethod? = nil, dehazeMethod: DehazeMethod? = nil) {
         guard !busy, let p = project, !p.frames.isEmpty, let repo = repository else { return }
         busy = true; status = "分析星空亮度与背景"; progress = 0
         Task {
             do {
-                var suggested = try await previewWorker.suggest(project: p, repository: repo)
+                var suggested = try await previewWorker.suggest(project: p, repository: repo, method: dehazeMethod)
                 suggested.developMethod = method ?? p.adjustments.developMethod ?? .natural
                 suggested.dehazeStrength = p.adjustments.dehazeStrength
                 suggested.nebulaColorRecovery = p.adjustments.nebulaColorRecovery ?? 0.45

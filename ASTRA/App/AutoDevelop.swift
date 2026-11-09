@@ -19,7 +19,7 @@ enum AutoDevelop {
         }
     }
 
-    static func fitSky(_ tiles: [SkyTile], noise: Double) -> SkySurface? {
+    static func fitSky(_ tiles: [SkyTile], noise: Double, linear: Bool = false) -> SkySurface? {
         guard tiles.count >= 24 else { return nil }
         let terms = tiles.map { [1, $0.x, $0.y, $0.x*$0.x, $0.x*$0.y, $0.y*$0.y] }
         var weights = [Double](repeating: 1, count: tiles.count)
@@ -34,7 +34,7 @@ enum AutoDevelop {
                 }
             }
             // Dampen curvature where the available sky samples do not constrain it well.
-            for i in 3..<6 { equations[i][i] += 0.12 }
+            for i in 3..<6 { equations[i][i] += linear ? 1_000_000 : 0.12 }
             for col in 0..<6 {
                 let pivot = (col..<6).max { abs(equations[$0][col]) < abs(equations[$1][col]) }!
                 equations.swapAt(col, pivot)
@@ -215,6 +215,7 @@ enum AutoDevelop {
         let bright = pixels[min(n-1, n*995/1000)].0
         let white = max(sky+0.015, bright)
         a.autoWhite = white
+        a.autoMidtone = max(0, min(1, (pixels[n * 90 / 100].0 - sky) / (white - sky)))
         if a.adaptiveSky == true {
             let backgroundLevels = tileLights.compactMap { tile -> Double? in
                 guard tile.count >= 12 else { return nil }

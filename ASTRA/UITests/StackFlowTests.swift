@@ -97,9 +97,19 @@ final class StackFlowTests: XCTestCase {
         let automatic = canvas.screenshot().image.pngData()
         decrease.tap()
         XCTAssertTrue(previewChanged(canvas, from: automatic), "去灰刻度尺必须改变真实预览像素")
+        let inspector = app.scrollViews["editor-inspector"]
+        let gentle = app.buttons["dehaze-method-gentle"]
+        for _ in 0..<4 where !gentle.isHittable {
+            inspector.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.78))
+                .press(forDuration: 0.05, thenDragTo: inspector.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.52)))
+        }
+        let beforeMethod = canvas.screenshot().image.pngData()
+        gentle.tap()
+        let selected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "selected == true"), object: gentle)
+        XCTAssertEqual(XCTWaiter.wait(for: [selected], timeout: 20), .completed)
+        XCTAssertTrue(previewChanged(canvas, from: beforeMethod), "去灰方式必须重新计算预览")
         let noSpikes = canvas.screenshot().image.pngData()
         let four = app.buttons["spike-style-four"]
-        let inspector = app.scrollViews["editor-inspector"]
         for _ in 0..<3 where !four.isHittable { inspector.swipeUp(velocity: .slow) }
         four.tap()
         XCTAssertTrue(previewChanged(canvas, from: noSpikes), "星芒必须改变真实预览像素")

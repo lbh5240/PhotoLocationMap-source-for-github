@@ -43,7 +43,7 @@ using namespace metal;
 
 [[stitchable]] float4 astroSTF(coreimage::sample_t source, float blackR, float blackG,
                               float blackB, float white, float method, float skyNoise, float midtone, float adaptive, float shadowKnee,
-                              float dehazeStrength, float colorRecovery) {
+                              float dehazeStrength, float colorRecovery, float dehazeMode) {
     float3 black = float3(blackR, blackG, blackB);
     float sky = dot(black, float3(0.2126, 0.7152, 0.0722));
     float toe = max((white - sky) * 0.02, 0.0005);
@@ -64,9 +64,19 @@ using namespace metal;
             sqrt(signedSignal * signedSignal + rounding * rounding));
         // Smoothly restore unity gain before the brightest parts of the nebula.
         const float extra = max(0.0, dehazeStrength - 1.0);
-        const float knee = shadowKnee + min(0.96 - shadowKnee, 0.48 * shadowKnee + 0.09) *
-                           extra * mix(1.0, 0.24, colorSignal);
-        const float corrected = signal * mix(0.02, 1.0, smoothstep(0.0, knee, signal));
+        float knee = shadowKnee + min(0.96 - shadowKnee, 0.48 * shadowKnee + 0.09) *
+                     extra * mix(1.0, 0.24, colorSignal);
+        float shadowFloor = 0.02;
+        if (dehazeMode < 0.5) {
+            knee *= 0.65;
+            shadowFloor = 0.12;
+        } else if (dehazeMode > 1.5) {
+            // Reduce grey veil while preserving chromatic nebula and stars.
+            knee *= mix(1.20, 0.45, colorSignal);
+            shadowFloor = mix(0.025, 0.25, colorSignal);
+        }
+        knee = clamp(knee, 0.01, 0.96);
+        const float corrected = signal * mix(shadowFloor, 1.0, smoothstep(0.0, knee, signal));
         x = mix(x, corrected, min(dehazeStrength, 1.0));
     } else if (adaptive > 0.5 && (method < 2.5 || method >= 3.5)) {
         // Limit the gain near the measured noise floor across all adaptive curves.
@@ -98,6 +108,11 @@ using namespace metal;
                               (target + anchor * (1.0 - 2.0 * target)), 0.20, 0.66);
         const float u = 2.0 * x / (1.0 + 2.0 * x);
         mapped = (1.0 - m) * u / (m + (1.0 - 2.0 * m) * u);
+    }
+    // Keep non-core curves below an open highlight shoulder. This preserves
+    // a distinct rendering for each method while reducing washed-out cores.
+    if (method < 0.5 || method >= 1.5) {
+        mapped /= 1.0 + 0.25 * mapped;
     }
     // Chroma in the sky is dominated by read noise and colour differences in
     // the background model. Fade it in continuously as genuine signal rises.

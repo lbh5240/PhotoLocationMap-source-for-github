@@ -65,6 +65,26 @@ enum DevelopMethod: Int, Codable, CaseIterable, Identifiable, Sendable {
         case .midtones: "联动亮度的中间调变换，适合中间调发灰、星云层次不明显的画面"
     } }
 }
+enum DehazeMethod: String, Codable, CaseIterable, Sendable {
+    case gentle, balanced, nebula
+
+    var title: String {
+        switch self {
+        case .gentle: "平缓"
+        case .balanced: "均衡"
+        case .nebula: "护云"
+        }
+    }
+
+    var shaderValue: Float {
+        switch self {
+        case .gentle: 0
+        case .balanced: 1
+        case .nebula: 2
+        }
+    }
+}
+
 enum StarSpikeStyle: String, Codable, CaseIterable, Sendable {
     case off, four, six
 
@@ -125,8 +145,10 @@ struct Adjustments: Codable, Equatable, Sendable {
     var maskedStretch: Double?
     var gradientRemoval: Double?
     var adaptiveSky: Bool?
+    var dehazeMethod: DehazeMethod?
     var adaptiveSkyNoise: Double?
     var adaptiveShadowKnee: Double?
+    var autoMidtone: Double?
     var dehazeStrength: Double?
     var nebulaColorRecovery: Double?
     var starSpikeStyle: StarSpikeStyle?

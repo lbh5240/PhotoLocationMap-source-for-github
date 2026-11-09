@@ -71,6 +71,11 @@ enum AutoDevelopTests {
         guard let fit = AutoDevelop.fitSky(tiles, noise: 0.003) else {
             preconditionFailure("The fit should have enough sky around the nebula")
         }
+        guard let plane = AutoDevelop.fitSky(tiles, noise: 0.003, linear: true) else {
+            preconditionFailure("The plane must fit a well-covered sky")
+        }
+        precondition(abs(plane.coefficients[3]) < 0.0001 && abs(plane.coefficients[5]) < 0.0001)
+        precondition(abs(fit.coefficients[5]) > 0.01, "The curved background must retain curvature")
         let error = tiles.map { abs(fit.value(x: $0.x, y: $0.y) - sky($0.x, $0.y)) }.max()!
         precondition(error < 0.004, "The model must follow the gradient without absorbing the nebula")
         let clean = AutoDevelop.skyCorrection(spread: 0.002, noise: 0.003, signal: 0.07)

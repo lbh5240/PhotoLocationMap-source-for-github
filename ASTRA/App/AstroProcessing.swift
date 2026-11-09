@@ -10,6 +10,7 @@ struct AstroProfile {
     let skyNoise: Float
     let midtone: Float
     let skyGradient: CIImage?
+    let skyGradientLinear: CIImage?
     let skySpread: Double
 }
 
@@ -48,22 +49,24 @@ enum AstroProcessing {
         guard let seeds = try spikeSeeds.get().apply(extent: extent, arguments: [image, broad, selection]) else {
             throw AstroError.message("星芒亮星检测失败")
         }
-        let quarterTurn = Double.pi / 4
         let sixthTurn = Double.pi / 6
-        let angles = style == .four
-            ? [quarterTurn, 3 * quarterTurn]
+        let angles: [Double] = style == .four
+            ? [0, Double.pi / 2]
             : [sixthTurn, 3 * sixthTurn, 5 * sixthTurn]
-        let radius = max(2, size * 0.013)
+        let radius = max(1.5, size * 0.005)
         let rays = angles.map { angle -> CIImage in
             let parameters: [String: Any] = [kCIInputRadiusKey: radius, kCIInputAngleKey: angle]
-            // Two directional averages give a tapered profile along each axis.
+            // Repeated convolution produces a smooth taper instead of a hard line.
             return seeds.applyingFilter("CIMotionBlur", parameters: parameters)
-                .applyingFilter("CIMotionBlur", parameters: parameters).cropped(to: extent)
+                .applyingFilter("CIMotionBlur", parameters: parameters)
+                .applyingFilter("CIMotionBlur", parameters: parameters)
+                .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: max(0.35, size * 0.00035)])
+                .cropped(to: extent)
         }
         let combined = rays.dropFirst().reduce(rays[0]) { sum, next in
             next.applyingFilter("CIAdditionCompositing", parameters: [kCIInputBackgroundImageKey: sum])
         }
-        let gain = Float(strength * 3 / sqrt(Double(angles.count)))
+        let gain = Float(strength * 1.6 / sqrt(Double(angles.count)))
         guard let result = try spikeComposite.get().apply(extent: extent, arguments: [image, combined, gain]) else {
             throw AstroError.message("星芒合成失败")
         }
@@ -88,7 +91,9 @@ enum AstroProcessing {
         let blur = image.clampedToExtent().applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: radius]).cropped(to: image.extent)
         let bg = profile.background.transformed(by: CGAffineTransform(scaleX: image.extent.width / profile.background.extent.width,
                                                                        y: image.extent.height / profile.background.extent.height))
-        let gradientMap = adjustments.adaptiveSky == true ? profile.skyGradient : nil
+        let method = adjustments.dehazeMethod ?? .balanced
+        let skyModel = method == .gentle ? (profile.skyGradientLinear ?? profile.skyGradient) : profile.skyGradient
+        let gradientMap = adjustments.adaptiveSky == true ? skyModel : nil
         let modeled = gradientMap.map {
             $0.transformed(by: CGAffineTransform(scaleX: image.extent.width / $0.extent.width,
                                                  y: image.extent.height / $0.extent.height)).clampedToExtent()
@@ -111,11 +116,13 @@ enum AstroProcessing {
         guard let result = try stfKernel.get().apply(extent: image.extent,
             arguments: [image, red, green, blue, max(white, black + 0.005),
                         Float(adjustments.developMethod?.rawValue ?? 0),
-                        Float(adjustments.adaptiveSkyNoise ?? Double(profile.skyNoise)), profile.midtone,
+                        Float(adjustments.adaptiveSkyNoise ?? Double(profile.skyNoise)),
+                        Float(adjustments.autoMidtone ?? Double(profile.midtone)),
                         adjustments.adaptiveSky == true ? Float(1) : Float(0),
                         Float(adjustments.adaptiveShadowKnee ?? 0),
                         Float(min(2, max(0, adjustments.dehazeStrength ?? 1))),
-                        Float(min(1, max(0, adjustments.nebulaColorRecovery ?? 0)))]) else {
+                        Float(min(1, max(0, adjustments.nebulaColorRecovery ?? 0))),
+                        (adjustments.dehazeMethod ?? .balanced).shaderValue]) else {
             throw AstroError.message("STF 预览渲染失败，请重试")
         }
         return result
@@ -166,12 +173,13 @@ enum AstroProcessing {
         let upperSky = light.isEmpty ? black : light[light.count * 75 / 100]
         let midtone = light.isEmpty ? 0.15 : (light[light.count * 90 / 100] - black) / span
         let skyNoise = AutoDevelop.skyNoise((data, width, height, 1)) ?? 0
-        var skyGradient: CIImage?
-        var skySpread = 0.0
-        if let surface = AutoDevelop.fitSky(tiles, noise: skyNoise) {
+        func makeGradient(linearModel: Bool) -> (CIImage?, Double) {
+            guard let surface = AutoDevelop.fitSky(tiles, noise: skyNoise, linear: linearModel) else {
+                return (nil, 0)
+            }
             let fitted = tiles.map { surface.value(x: $0.x, y: $0.y) }.sorted()
             let baseline = fitted[fitted.count/2]
-            skySpread = fitted[fitted.count*9/10] - fitted[fitted.count/10]
+            let spread = fitted[fitted.count*9/10] - fitted[fitted.count/10]
             var residual = [Float](repeating: 1, count: gw*gh*4)
             for y in 0..<gh { for x in 0..<gw {
                 let value = surface.value(x: (Double(x)+0.5)*2/Double(gw)-1,
@@ -180,8 +188,10 @@ enum AstroProcessing {
             } }
             let map = CIImage(bitmapData: residual.withUnsafeBytes { Data($0) }, bytesPerRow: gw*16,
                               size: CGSize(width: gw, height: gh), format: .RGBAf, colorSpace: linear)
-            skyGradient = bitmapRowsTopFirst ? map.oriented(.downMirrored) : map
+            return (bitmapRowsTopFirst ? map.oriented(.downMirrored) : map, spread)
         }
+        let (skyGradient, skySpread) = makeGradient(linearModel: false)
+        let (skyGradientLinear, _) = makeGradient(linearModel: true)
         let levels = cells.map { 0.2126*$0[0] + 0.7152*$0[1] + 0.0722*$0[2] }.sorted()
         let floor = max(0.005, levels[levels.count / 3])
         var grid = [Float](repeating: 1, count: gw*gh*4)
@@ -205,6 +215,6 @@ enum AstroProcessing {
         background = background.clampedToExtent().applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 0.9])
             .cropped(to: CGRect(x: 0, y: 0, width: gw, height: gh))
         return AstroProfile(background: background, black: max(0,black), white: black+span, blackRGB: blackRGB, skyNoise: Float(skyNoise), midtone: midtone,
-                            skyGradient: skyGradient, skySpread: skySpread)
+                            skyGradient: skyGradient, skyGradientLinear: skyGradientLinear, skySpread: skySpread)
     }
 }

@@ -286,6 +286,13 @@ struct WorkspaceView: View {
                 if p.adjustments.adaptiveShadowKnee == nil {
                     Text("先点智能显影分析灰底，再调去灰强度。").font(.caption2).foregroundStyle(.secondary)
                 }
+                Text("去灰方式").font(.caption2.weight(.semibold)).foregroundStyle(EditorStyle.accent)
+                starChoices(DehazeMethod.allCases, selected: p.adjustments.dehazeMethod ?? .balanced,
+                            id: "dehaze-method", title: { $0.title }) { value in
+                    store.chooseDehazeMethod(value)
+                }
+                Text("平缓适合渐变光污染；均衡处理不均匀天空；护云侧重保留有色云气。")
+                    .font(.caption2).foregroundStyle(.secondary)
                 starSpikeControls(p)
                 VStack(spacing: 6) {
                     developMethodRow([.natural, .core, .nebula], selected: p.adjustments.developMethod ?? .natural)
